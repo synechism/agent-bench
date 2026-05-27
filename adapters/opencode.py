@@ -6,8 +6,6 @@ Headless mode: `opencode run <prompt>` or similar. Verify on day 1.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 from adapters.base import AgentAdapter, AgentCapabilities, TaskSpec
 
 

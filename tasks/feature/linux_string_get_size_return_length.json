@@ -1,0 +1,18 @@
+{
+  "kind": "feature",
+  "name": "linux_string_get_size_return_length",
+  "prompt": "Backport the Linux v6.7 `string_get_size()` API improvement onto this v6.6 tree. Change `string_get_size()` so it returns the number of characters that would have been written, matching `snprintf()` semantics, while preserving existing formatting and truncation behavior. Update the public declaration and add or adjust focused tests if appropriate.",
+  "codebase": "linux_v6_6",
+  "oracle": {
+    "ground_truth_base": "v6.6",
+    "ground_truth_target": "v6.7",
+    "ground_truth_files": [
+      "include/linux/string_helpers.h",
+      "lib/string_helpers.c"
+    ],
+    "reference_diff_cmd": "git diff v6.6 v6.7 -- include/linux/string_helpers.h lib/string_helpers.c",
+    "test_cmd": "make -j4 lib/string_helpers.o lib/test-string_helpers.o",
+    "feature_description": "Return snprintf-style output length from string_get_size()",
+    "timeout_s": 1800
+  }
+}

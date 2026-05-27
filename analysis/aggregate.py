@@ -11,8 +11,27 @@ from __future__ import annotations
 import argparse
 import json
 from collections import defaultdict
+from math import ceil
 from pathlib import Path
+from statistics import median
 from typing import Any
+
+
+METRIC_NAMES = (
+    "peak_tree_pss",
+    "peak_tree_uss",
+    "peak_tree_rss",
+    "wall_time_s",
+    "files_grepped",
+    "tool_invocations",
+)
+
+BASELINE_ADJUSTED_METRICS = (
+    "peak_tree_pss",
+    "peak_tree_uss",
+    "peak_tree_rss",
+    "wall_time_s",
+)
 
 
 def load_all_summaries(runs_dir: Path) -> list[dict]:
@@ -41,42 +60,143 @@ def group_by_cell(summaries: list[dict]) -> dict[str, list[dict]]:
     return dict(groups)
 
 
-def aggregate_cell(summaries: list[dict]) -> dict[str, Any]:
+def _stats(values: list[float]) -> dict[str, float]:
+    if not values:
+        return {"median": 0, "p90": 0, "max": 0, "min": 0, "count": 0}
+    sv = sorted(values)
+    n = len(sv)
+    return {
+        "median": float(median(sv)),
+        "p90": sv[min(n - 1, max(0, ceil(n * 0.9) - 1))],
+        "max": sv[-1],
+        "min": sv[0],
+        "count": n,
+    }
+
+
+def _cap_key(summary: dict) -> str:
+    cap = summary.get("manifest", {}).get("caps", {}).get("memory_mb")
+    return str(cap or "nocap")
+
+
+def _agent_key(summary: dict) -> str:
+    return str(summary.get("manifest", {}).get("agent", "unknown"))
+
+
+def _task_kind(summary: dict) -> str:
+    return str(summary.get("manifest", {}).get("task", {}).get("kind", ""))
+
+
+def _task_name(summary: dict) -> str:
+    return str(summary.get("manifest", {}).get("task", {}).get("name", "unknown"))
+
+
+def _is_baseline_summary(summary: dict) -> bool:
+    task_name = _task_name(summary)
+    codebase = summary.get("manifest", {}).get("task", {}).get("codebase")
+    return (
+        _task_kind(summary) == "baseline"
+        or task_name in {"empty_baseline", "empty_task"}
+        or codebase == "empty_baseline"
+    )
+
+
+def _summary_success(summary: dict) -> bool:
+    outcome = summary.get("outcome") or {}
+    if "task_success" in outcome:
+        return bool(outcome["task_success"])
+    exit_code = summary.get("exit_code")
+    return exit_code == 0
+
+
+def build_baseline_map(summaries: list[dict]) -> dict[tuple[str, str], dict[str, Any]]:
+    """Index successful empty-task baselines by (agent, memory_cap)."""
+    candidates: dict[tuple[str, str], dict[str, list[float]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    run_ids: dict[tuple[str, str], list[str]] = defaultdict(list)
+
+    for summary in summaries:
+        if not _is_baseline_summary(summary) or not _summary_success(summary):
+            continue
+        if not summary.get("peak_tree_pss"):
+            continue
+        key = (_agent_key(summary), _cap_key(summary))
+        run_ids[key].append(str(summary.get("run_id", "unknown")))
+        for metric in BASELINE_ADJUSTED_METRICS:
+            value = summary.get(metric)
+            if value is not None:
+                candidates[key][metric].append(float(value))
+
+    baselines: dict[tuple[str, str], dict[str, Any]] = {}
+    for key, metrics in candidates.items():
+        baselines[key] = {
+            "agent": key[0],
+            "cap": key[1],
+            "run_ids": run_ids[key],
+            "metrics": {
+                metric: _stats(values)["median"]
+                for metric, values in metrics.items()
+                if values
+            },
+        }
+    return baselines
+
+
+def _outcome_rollup(summaries: list[dict]) -> dict[str, Any]:
+    failure_phases: dict[str, int] = defaultdict(int)
+    success = 0
+    oracle_success = 0
+    oracle_failed = 0
+    timed_out = 0
+
+    for summary in summaries:
+        outcome = summary.get("outcome") or {}
+        if _summary_success(summary):
+            success += 1
+        else:
+            phase = outcome.get("failure_phase") or "unknown"
+            failure_phases[phase] += 1
+        if outcome.get("oracle_success") is True:
+            oracle_success += 1
+        elif outcome.get("oracle_success") is False:
+            oracle_failed += 1
+        if outcome.get("timed_out"):
+            timed_out += 1
+
+    return {
+        "success": success,
+        "failed": len(summaries) - success,
+        "success_rate": success / len(summaries) if summaries else 0,
+        "oracle_success": oracle_success,
+        "oracle_failed": oracle_failed,
+        "timed_out": timed_out,
+        "failure_phases": dict(sorted(failure_phases.items())),
+    }
+
+
+def aggregate_cell(summaries: list[dict], baseline: dict[str, Any] | None = None) -> dict[str, Any]:
     """Compute median, p90, max for key metrics across N reps."""
 
     if not summaries:
         return {}
-
-    def _stats(values: list[float]) -> dict[str, float]:
-        if not values:
-            return {"median": 0, "p90": 0, "max": 0, "min": 0, "count": 0}
-        sv = sorted(values)
-        n = len(sv)
-        return {
-            "median": sv[n // 2],
-            "p90": sv[int(n * 0.9)],
-            "max": sv[-1],
-            "min": sv[0],
-            "count": n,
-        }
-
-    metrics = {
-        "peak_tree_pss": [],
-        "peak_tree_uss": [],
-        "peak_tree_rss": [],
-        "wall_time_s": [],
-        "files_grepped": [],
-        "tool_invocations": [],
+    metrics: dict[str, list[float]] = {metric: [] for metric in METRIC_NAMES}
+    adjusted_metrics: dict[str, list[float]] = {
+        metric: [] for metric in BASELINE_ADJUSTED_METRICS
     }
     categories: dict[str, dict[str, list[float]]] = defaultdict(
         lambda: defaultdict(list)
     )
+    is_baseline = all(_is_baseline_summary(summary) for summary in summaries)
+    baseline_metrics = baseline.get("metrics", {}) if baseline and not is_baseline else {}
 
     for s in summaries:
         for metric in metrics:
             val = s.get(metric, 0)
-            if val:
+            if val is not None:
                 metrics[metric].append(float(val))
+            if metric in adjusted_metrics and metric in baseline_metrics and val is not None:
+                adjusted_metrics[metric].append(max(0.0, float(val) - baseline_metrics[metric]))
 
         for cat, data in s.get("categories", {}).items():
             categories[cat]["peak_pss"].append(float(data.get("peak_pss", 0)))
@@ -95,6 +215,17 @@ def aggregate_cell(summaries: list[dict]) -> dict[str, Any]:
         # First rep's manifest for metadata
         "agent": summaries[0].get("manifest", {}).get("agent", "unknown"),
         "task": summaries[0].get("manifest", {}).get("task", {}).get("name", "unknown"),
+        "outcomes": _outcome_rollup(summaries),
+        "baseline": {
+            "used": bool(baseline_metrics),
+            "agent": baseline.get("agent") if baseline else None,
+            "cap": baseline.get("cap") if baseline else None,
+            "run_ids": baseline.get("run_ids", []) if baseline else [],
+            "metrics": baseline_metrics,
+        },
+        "metrics_minus_baseline": {
+            metric: _stats(values) for metric, values in adjusted_metrics.items()
+        },
     }
 
     return result
@@ -108,10 +239,13 @@ def print_cell_table(cell_key: str, result: dict) -> None:
 
     m = result["metrics"]
     pss = m["peak_tree_pss"]
+    outcomes = result.get("outcomes", {})
 
     def mb(b: float) -> str:
         return f"{b / 1024 / 1024:.0f} MB" if b > 0 else "N/A"
 
+    print(f"  Success       | {outcomes.get('success', 0)}/{result['n_reps']} "
+          f"({outcomes.get('success_rate', 0):.0%})")
     print(f"  Peak Tree PSS | median: {mb(pss['median']):>8s}  "
           f"p90: {mb(pss['p90']):>8s}  max: {mb(pss['max']):>8s}")
     print(f"  Peak Tree USS | median: {mb(m['peak_tree_uss']['median']):>8s}  "
@@ -123,8 +257,21 @@ def print_cell_table(cell_key: str, result: dict) -> None:
     print(f"  Tool Calls    | median: {m['tool_invocations']['median']:.0f}  "
           f"max: {m['tool_invocations']['max']:.0f}")
 
+    if result.get("baseline", {}).get("used"):
+        adjusted = result["metrics_minus_baseline"]
+        print(f"  PSS Over Base | median: {mb(adjusted['peak_tree_pss']['median']):>8s}  "
+              f"max: {mb(adjusted['peak_tree_pss']['max']):>8s}")
+        print(f"  Wall Over Base| median: {adjusted['wall_time_s']['median']:.0f}s  "
+              f"max: {adjusted['wall_time_s']['max']:.0f}s")
+
+    if outcomes.get("failure_phases"):
+        failures = ", ".join(
+            f"{phase}={count}" for phase, count in outcomes["failure_phases"].items()
+        )
+        print(f"  Failures      | {failures}")
+
     if result["categories"]:
-        print(f"\n  --- Per-Category Peak PSS (median) ---")
+        print("\n  --- Per-Category Peak PSS (median) ---")
         for cat, data in sorted(result["categories"].items()):
             p = data["peak_pss"]
             if p["median"] > 0:
@@ -194,9 +341,14 @@ def main() -> None:
     groups = group_by_cell(summaries)
     print(f"Grouped into {len(groups)} cells (agent × task × codebase × cap)")
 
+    baselines = build_baseline_map(summaries)
+    print(f"Found {len(baselines)} successful baseline cells")
+
     aggregated = {}
     for key, group in sorted(groups.items()):
-        result = aggregate_cell(group)
+        first = group[0]
+        baseline = baselines.get((_agent_key(first), _cap_key(first)))
+        result = aggregate_cell(group, baseline=baseline)
         aggregated[key] = result
         print_cell_table(key, result)
 

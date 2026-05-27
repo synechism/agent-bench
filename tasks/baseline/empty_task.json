@@ -1,0 +1,11 @@
+{
+  "kind": "baseline",
+  "name": "empty_task",
+  "prompt": "Empty baseline run. Do not inspect files, do not run tools, and do not edit anything. Reply exactly BASELINE_OK.",
+  "codebase": "empty_baseline",
+  "oracle": {
+    "expected_text": "BASELINE_OK",
+    "timeout_s": 120,
+    "description": "No-op runtime baseline for measuring agent startup and conversation floor"
+  }
+}

@@ -7,5 +7,6 @@
   "sandbox": "local",
   "runs_dir": "runs",
   "timeout_per_run": 1800,
+  "parallel_jobs": 1,
   "log_api_usage": true
 }

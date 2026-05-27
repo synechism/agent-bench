@@ -1,0 +1,17 @@
+{
+  "kind": "qa",
+  "name": "linux_proc_thread_self",
+  "prompt": "A Linux procfs bug report says `/proc/thread-self` sometimes resolves to the process leader path instead of the calling thread path, especially when checked from a secondary thread or PID namespace. Investigate the kernel source and selftests without changing code. Identify the files and functions that implement `/proc/self` and `/proc/thread-self`, explain how the symlink target is built, and point to the focused selftest that covers the behavior.",
+  "codebase": "linux_v6_6",
+  "oracle": {
+    "relevant_files": [
+      "fs/proc/thread_self.c",
+      "fs/proc/self.c",
+      "fs/proc/root.c",
+      "fs/proc/base.c",
+      "include/linux/proc_fs.h",
+      "tools/testing/selftests/proc/thread-self.c"
+    ],
+    "timeout_s": 900
+  }
+}

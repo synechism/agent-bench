@@ -1,0 +1,17 @@
+{
+  "kind": "feature",
+  "name": "redis_expire_conditional_options",
+  "prompt": "Implement conditional expiration options for the Redis EXPIRE command family. `EXPIRE`, `PEXPIRE`, `EXPIREAT`, and `PEXPIREAT` should accept `NX`, `XX`, `GT`, and `LT` with Redis-compatible semantics: NX only when the key has no expiry, XX only when it already has one, GT only when the new expiry is greater than the current expiry, and LT only when it is less. Reject incompatible option combinations. Add focused tests.",
+  "codebase": "redis_expire_options_base",
+  "oracle": {
+    "ground_truth_commit": "f74af0e61d6104922325e2f38284ea66e4f3ccd4",
+    "ground_truth_files": [
+      "src/expire.c",
+      "src/server.c",
+      "tests/unit/expire.tcl"
+    ],
+    "test_cmd": "./runtest --single unit/expire",
+    "feature_description": "NX/XX/GT/LT options for EXPIRE, PEXPIRE, EXPIREAT, and PEXPIREAT",
+    "timeout_s": 1800
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "kind": "qa",
+  "name": "redis_getex_expired_event",
+  "prompt": "A Redis bug report says that `GETEX key EXAT <past>` and `GETEX key PXAT <past>` remove the key but notify observers as a normal deletion instead of an expiration. Investigate the source without changing code. Identify the files and functions relevant to the fix, explain the root cause, and describe the smallest safe patch.",
+  "codebase": "redis_getex_expire_event_base",
+  "oracle": {
+    "relevant_files": [
+      "src/t_string.c",
+      "src/db.c",
+      "src/server.h",
+      "tests/unit/type/string.tcl"
+    ],
+    "ground_truth_commit": "0dfb0250e66e73e4988370e05dba66a801066f10",
+    "ground_truth_summary": "GETEX with an already elapsed absolute expire should call dbGenericDelete with DB_FLAG_KEY_EXPIRED rather than dbSyncDelete/dbAsyncDelete with delete semantics.",
+    "timeout_s": 900
+  }
+}

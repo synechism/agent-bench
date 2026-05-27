@@ -12,6 +12,16 @@ redis:
   commit: "7.2.5"  # stable release tag
   language: c
 
+redis_getex_expire_event_base:
+  repo_url: https://github.com/redis/redis
+  commit: "da8f7428fae4ccffa5e07d869f65fe7413898f78"  # parent of 0dfb0250
+  language: c
+
+redis_expire_options_base:
+  repo_url: https://github.com/redis/redis
+  commit: "82c3158ad5fe5aab002a6d0565832d5bd15082f5"  # parent of f74af0e6
+  language: c
+
 fastapi:
   repo_url: https://github.com/tiangolo/fastapi
   commit: "0.115.6"
@@ -27,9 +37,16 @@ shadcn-ui:
   commit: "0.8.0"
   language: typescript
 
+linux_v6_6:
+  repo_url: https://github.com/torvalds/linux
+  commit: "v6.6"
+  language: c
+
+empty_baseline:
+  repo_url: builtin:empty
+  commit: "builtin-empty-v1"
+  language: text
+
 # Future additions (week 3+):
-# linux:
-#   repo_url: https://github.com/torvalds/linux
-#   commit: "v6.6"
-#   language: c
-#   note: full build needs 32GB+ RAM and >10GB disk — not a day-1 target
+# Full-kernel build/test tasks should be opt-in: they need substantial disk,
+# time, and memory. Prefer focused selftests or compile-only checks by default.

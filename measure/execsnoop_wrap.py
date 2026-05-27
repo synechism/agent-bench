@@ -56,7 +56,7 @@ def run_bpftrace_snoop(out_jsonl: Path) -> subprocess.Popen:
     if not find_bpftrace():
         raise RuntimeError("bpftrace not found — install bpftrace or bcc-tools")
 
-    with out_jsonl.open("w") as f:
+    with out_jsonl.open("a") as f:
         proc = subprocess.Popen(
             ["bpftrace", "-e", BPFTRACE_SCRIPT],
             stdout=f,
@@ -65,46 +65,88 @@ def run_bpftrace_snoop(out_jsonl: Path) -> subprocess.Popen:
     return proc
 
 
+def _parse_bcc_line(line: str, t0: float) -> dict | None:
+    """Parse common bcc execsnoop output into a JSON record."""
+    parts = line.split()
+    if len(parts) < 6:
+        return None
+    if parts[0].startswith("TIME"):
+        return None
+
+    try:
+        rel_ts = float(parts[0])
+        pid = int(parts[2])
+        ppid = int(parts[3])
+    except ValueError:
+        return None
+
+    return {
+        "ts": int((t0 + rel_ts) * 1e9),
+        "pid": pid,
+        "ppid": ppid,
+        "comm": parts[1],
+        "argv": " ".join(parts[5:]),
+        "source": "execsnoop",
+    }
+
+
+def _run_execsnoop_bcc_foreground(out_jsonl: Path, exe: str) -> int:
+    """Run bcc execsnoop and write parsed JSONL until terminated."""
+    t0 = time.time()
+    proc = subprocess.Popen(
+        [exe, "--timestamps"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+
+    def _cleanup(signum: int, frame: object) -> None:
+        if proc.poll() is None:
+            proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _cleanup)
+    signal.signal(signal.SIGINT, _cleanup)
+
+    assert proc.stdout is not None
+    with out_jsonl.open("a") as f:
+        for line in proc.stdout:
+            rec = _parse_bcc_line(line, t0)
+            if rec is None:
+                continue
+            f.write(json.dumps(rec) + "\n")
+            f.flush()
+
+    return proc.wait()
+
+
 def run_execsnoop_bcc(out_jsonl: Path) -> subprocess.Popen:
     """Start bcc execsnoop, transforming its output to jsonl.
 
-    bcc execsnoop outputs TS-relative lines like:
-    TIME(s) PARSENT COMM   PID    ARGS
+    The parser runs in a child Python process so the orchestrator can continue.
     """
     exe = find_execsnoop()
     if not exe:
         raise RuntimeError("execsnoop not found — install bcc-tools")
 
-    t0 = time.time()
-
-    with out_jsonl.open("w") as f:
-        proc = subprocess.Popen(
-            [exe, "--timestamps"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-        assert proc.stdout is not None
-        # Skip header
-        header = proc.stdout.readline()
-        while True:
-            line = proc.stdout.readline()
-            if not line:
-                break
-            parts = line.split()
-            if len(parts) < 5:
-                continue
-            rec = {
-                "ts": int((t0 + float(parts[0])) * 1e9),
-                "pid": int(parts[3]),
-                "ppid": int(parts[1]) if len(parts) > 1 else -1,
-                "comm": parts[2],
-                "argv": " ".join(parts[4:]),
-                "source": "execsnoop",
-            }
-            f.write(json.dumps(rec) + "\n")
-            f.flush()
-    return proc
+    return subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "measure.execsnoop_wrap",
+            str(out_jsonl),
+            "--method",
+            "execsnoop-worker",
+            "--execsnoop-path",
+            exe,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def fallback_audit(out_jsonl: Path, root_pid: int) -> subprocess.Popen:
@@ -117,14 +159,14 @@ def fallback_audit(out_jsonl: Path, root_pid: int) -> subprocess.Popen:
     # This runs in a subprocess that writes to out_jsonl.
     script = f"""
 import json, os, time, sys
+from pathlib import Path
 seen = set()
 root_pid = {root_pid}
 out_path = "{out_jsonl}"
-t0 = time.time()
 
 def children_of(pid):
     try:
-        return [int(c) for c in Path(f"/proc/{{pid}}/children").read_text().split()]
+        return [int(c) for c in Path(f"/proc/{{pid}}/task/{{pid}}/children").read_text().split()]
     except Exception:
         return []
 
@@ -136,12 +178,12 @@ def all_descendants(root):
         stack.extend(children_of(pid))
     return result
 
-with open(out_path, "w") as f:
+with open(out_path, "a") as f:
     while Path(f"/proc/{{root_pid}}").exists():
         for pid in all_descendants(root_pid):
             if pid not in seen:
                 seen.add(pid)
-                rec = {{"ts": int((time.time() - t0) * 1e9), "pid": pid, "source": "audit_fallback"}}
+                rec = {{"ts": int(time.time() * 1e9), "pid": pid, "source": "audit_fallback"}}
                 f.write(json.dumps(rec) + "\\n")
         f.flush()
         time.sleep(0.1)
@@ -157,9 +199,15 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Log every exec() during a run")
     p.add_argument("out_jsonl", type=Path, help="Output jsonl path")
     p.add_argument("--root-pid", type=int, default=0, help="Root PID for fallback mode")
-    p.add_argument("--method", choices=["bpftrace", "execsnoop", "fallback", "auto"],
+    p.add_argument("--method", choices=["bpftrace", "execsnoop", "execsnoop-worker", "fallback", "auto"],
                    default="auto", help="Which method to use")
+    p.add_argument("--execsnoop-path", default="", help=argparse.SUPPRESS)
     args = p.parse_args()
+
+    if args.method == "execsnoop-worker":
+        if not args.execsnoop_path:
+            raise RuntimeError("--execsnoop-path is required for execsnoop-worker")
+        sys.exit(_run_execsnoop_bcc_foreground(args.out_jsonl, args.execsnoop_path))
 
     if args.method == "auto":
         if find_bpftrace():
@@ -179,8 +227,12 @@ def main() -> None:
         proc = fallback_audit(args.out_jsonl, args.root_pid)
 
     def _cleanup(signum: int, frame: object) -> None:
-        proc.terminate()
-        proc.wait()
+        if proc.poll() is None:
+            proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, _cleanup)

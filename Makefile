@@ -1,7 +1,10 @@
-.PHONY: install build-base build test lint clean matrix dry-run summarize aggregate
+PYTHON ?= python3
+PIP ?= $(PYTHON) -m pip
+
+.PHONY: install build-base build test lint clean matrix dry-run redis-linux dry-run-redis-linux summarize aggregate
 
 install:
-	pip install -e ".[dev]"
+	$(PIP) install -e ".[dev]"
 
 build-base:
 	docker build -t agent-harness/base:latest -f docker/base.Dockerfile .
@@ -13,23 +16,29 @@ build: build-base
 	docker build -t agent-harness/opencode:latest -f docker/opencode.Dockerfile .
 
 matrix:
-	python -m orchestrator.matrix --config harness_config.json
+	$(PYTHON) -m orchestrator.matrix --config harness_config.json
 
 dry-run:
-	python -m orchestrator.matrix --config harness_config.json --dry-run
+	$(PYTHON) -m orchestrator.matrix --config harness_config.json --dry-run
+
+redis-linux:
+	$(PYTHON) -m orchestrator.matrix --config harness_config_redis_linux.json
+
+dry-run-redis-linux:
+	$(PYTHON) -m orchestrator.matrix --config harness_config_redis_linux.json --dry-run
 
 summarize:
-	python -m analysis.summarize $(RUN_DIR)
+	$(PYTHON) -m analysis.summarize $(RUN_DIR)
 
 aggregate:
-	python -m analysis.aggregate runs/
+	$(PYTHON) -m analysis.aggregate runs/
 
 lint:
-	ruff check .
-	mypy .
+	$(PYTHON) -m ruff check .
+	$(PYTHON) -m mypy .
 
 test:
-	pytest -v
+	$(PYTHON) -m pytest -v
 
 clean:
 	rm -rf runs/* __pycache__ .pytest_cache

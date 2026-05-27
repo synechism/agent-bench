@@ -1,0 +1,18 @@
+{
+  "kind": "tests",
+  "name": "redis_getex_expired_event_tests",
+  "prompt": "Write a focused Redis regression test for the bug where `GETEX key EXAT <past>` or `GETEX key PXAT <past>` emits a deletion event instead of an expiration event. Follow the existing Tcl test style, prefer placing the test near the existing GETEX tests, and do not implement the server fix. Report the exact command you would run for the focused test.",
+  "codebase": "redis_getex_expire_event_base",
+  "oracle": {
+    "expected_files": [
+      "tests/unit/type/string.tcl"
+    ],
+    "related_source_files": [
+      "src/t_string.c",
+      "src/db.c"
+    ],
+    "test_cmd": "./runtest --single unit/type/string",
+    "ground_truth_commit": "0dfb0250e66e73e4988370e05dba66a801066f10",
+    "timeout_s": 900
+  }
+}

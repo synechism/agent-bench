@@ -7,8 +7,6 @@ entrypoint after installation.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 from adapters.base import AgentAdapter, AgentCapabilities, TaskSpec
 
 

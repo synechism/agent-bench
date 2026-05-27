@@ -10,14 +10,24 @@
 
 TOOL="$(basename "$0")"
 SHIM_DIR="$(dirname "$0")"
+ORIGINAL_PATH="$PATH"
 
 # Find the real binary: skip the shim dir itself, take the first match in remaining PATH
 _find_real() {
-    local saved="$SHIM_DIR"
-    # Temporarily remove shim dir from PATH to find the real binary
-    PATH="${PATH//$saved:}"
-    PATH="${PATH//:$saved}"
-    command -v "$TOOL" 2>/dev/null || true
+    local search_path="$ORIGINAL_PATH"
+    search_path="${search_path//$SHIM_DIR:}"
+    search_path="${search_path//:$SHIM_DIR}"
+    PATH="$search_path" command -v "$TOOL" 2>/dev/null || true
+}
+
+_json_escape() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
 }
 
 REAL="$(_find_real)"
@@ -30,7 +40,9 @@ START=$(date +%s.%N)
 
 # Log invocation start
 if [ -n "${EXEC_SHIM_LOG:-}" ]; then
-    echo "{\"tool\":\"$TOOL\",\"argv\":\"$*\",\"pid\":$$,\"start\":$START,\"source\":\"shim\"}" >> "$EXEC_SHIM_LOG"
+    TOOL_JSON="$(_json_escape "$TOOL")"
+    ARGV_JSON="$(_json_escape "$*")"
+    echo "{\"tool\":\"$TOOL_JSON\",\"argv\":\"$ARGV_JSON\",\"pid\":$$,\"start\":$START,\"source\":\"shim\"}" >> "$EXEC_SHIM_LOG"
 fi
 
 # Optional: place this process in a per-tool cgroup for kernel-accurate peak tracking
@@ -47,7 +59,8 @@ CODE=$?
 # Log invocation end
 END=$(date +%s.%N)
 if [ -n "${EXEC_SHIM_LOG:-}" ]; then
-    echo "{\"tool\":\"$TOOL\",\"pid\":$$,\"end\":$END,\"exit\":$CODE,\"source\":\"shim\"}" >> "$EXEC_SHIM_LOG"
+    TOOL_JSON="$(_json_escape "$TOOL")"
+    echo "{\"tool\":\"$TOOL_JSON\",\"pid\":$$,\"end\":$END,\"exit\":$CODE,\"source\":\"shim\"}" >> "$EXEC_SHIM_LOG"
 fi
 
 exit $CODE

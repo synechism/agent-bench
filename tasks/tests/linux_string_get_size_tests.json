@@ -1,0 +1,17 @@
+{
+  "kind": "tests",
+  "name": "linux_string_get_size_tests",
+  "prompt": "Add focused test coverage for `string_get_size()` in the Linux kernel. Cover boundary formatting around decimal and binary unit transitions, block size zero, and small output buffers/truncation behavior. Prefer extending the existing string helper runtime test rather than creating a new framework. Do not change `string_get_size()` itself unless needed to make the test compile. Report the focused build or test command you would run.",
+  "codebase": "linux_v6_6",
+  "oracle": {
+    "expected_files": [
+      "lib/test-string_helpers.c"
+    ],
+    "related_source_files": [
+      "lib/string_helpers.c",
+      "include/linux/string_helpers.h"
+    ],
+    "test_cmd": "make -j4 lib/test-string_helpers.o",
+    "timeout_s": 1200
+  }
+}

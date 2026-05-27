@@ -4,7 +4,6 @@ import argparse
 import csv
 import os
 import signal
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -103,13 +102,11 @@ def sample(
     signal.signal(signal.SIGTERM, _handle)
     signal.signal(signal.SIGINT, _handle)
 
-    jiffy = os.sysconf(os.sysconf_names["SC_CLK_TCK"])
-
     with out_csv.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow([
             "ts", "pid", "ppid", "comm", "pss", "uss", "rss",
-            "utime", "stime", "num_threads",
+            "utime", "stime", "num_threads", "starttime",
         ])
         t0 = time.time()
 
@@ -134,6 +131,7 @@ def sample(
                     st["utime"],
                     st["stime"],
                     st["num_threads"],
+                    st["starttime"],
                 ])
             f.flush()
             time.sleep(interval)

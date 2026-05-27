@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 
 class TaskKind(str, Enum):
+    baseline = "baseline"
     qa = "qa"
     feature = "feature"
     tests = "tests"
@@ -40,6 +41,7 @@ class TaskDef(BaseModel):
     prompt: str
     codebase: str                     # key into registry.yaml
     oracle: dict[str, Any] = Field(default_factory=dict)
+    # For "baseline": oracle = {"expected_text": "BASELINE_OK"}
     # For "qa": oracle = {"relevant_files": [...]}
     # For "feature": oracle = {"diff_url": "...", "test_cmd": "..."}
     # For "tests": oracle = {"pass_exit_code": 0, "timeout_s": 600}
@@ -97,6 +99,7 @@ class RunConfig(BaseModel):
     sandbox: str = "docker"
     runs_dir: Path = Path("runs")
     timeout_per_run: int = 1800  # 30 min default
+    parallel_jobs: int = 1        # >1 runs cells concurrently; best for iteration
 
     # API token log (off by default)
     log_api_usage: bool = True

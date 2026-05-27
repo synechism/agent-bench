@@ -19,8 +19,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
-import signal
+import socket
 import subprocess
 import sys
 import time
@@ -39,11 +40,18 @@ def _load_adapter(agent_name: str):
     return getattr(mod, class_name)()
 
 
-def _setup_shims(workdir: str, shim_dir: Path) -> dict[str, str]:
+def _setup_shims(shim_dir: Path) -> dict[str, str]:
     """Create symlinks in the shim dir for all observed tool binaries.
 
     Returns env vars to prepend the shim dir to PATH.
     """
+    shim_dir.mkdir(parents=True, exist_ok=True)
+
+    source_template = Path(__file__).resolve().parents[1] / "measure" / "shims" / "_template.sh"
+    template = shim_dir / "_template.sh"
+    shutil.copy2(source_template, template)
+    template.chmod(0o755)
+
     tools = [
         "rg", "grep", "cat", "head", "tail", "find", "git",
         "make", "cmake", "cargo", "go", "rustc", "gcc", "clang",
@@ -59,16 +67,210 @@ def _setup_shims(workdir: str, shim_dir: Path) -> dict[str, str]:
         "java", "javac", "mvn", "gradle",
     ]
 
-    template = shim_dir / "_template.sh"
     for tool in tools:
         real = shutil.which(tool)
         if real and not (shim_dir / tool).exists():
-            (shim_dir / tool).symlink_to(template)
+            (shim_dir / tool).symlink_to(template.resolve())
 
     return {
         "PATH": f"{shim_dir}:{os.environ.get('PATH', '')}",
         "SHIM_DIR": str(shim_dir),
     }
+
+
+def _timeout_s(manifest: RunManifest) -> int:
+    timeout = manifest.task.oracle.get("timeout_s")
+    if isinstance(timeout, int) and timeout > 0:
+        return timeout
+    return 1800
+
+
+def _expand_adapter_env(adapter) -> dict[str, str]:
+    expanded_env: dict[str, str] = {}
+    for key, val in adapter.env().items():
+        match = re.fullmatch(r"\$\{([^}]+)\}", val)
+        if match and match.group(1) not in os.environ:
+            continue
+        expanded_env[key] = os.path.expandvars(val)
+    return expanded_env
+
+
+def _looks_like_full_sha(ref: str) -> bool:
+    return bool(re.fullmatch(r"[0-9a-fA-F]{40}", ref))
+
+
+def _git_clone_command(repo_url: str, commit: str, codebase_dir: Path) -> tuple[list[str], str]:
+    base = ["git", "clone", "--quiet", "--filter=blob:none"]
+    if not _looks_like_full_sha(commit):
+        return (
+            [
+                *base,
+                "--depth",
+                "1",
+                "--branch",
+                commit,
+                "--single-branch",
+                "--no-checkout",
+                repo_url,
+                str(codebase_dir),
+            ],
+            "partial_shallow_ref",
+        )
+    return ([*base, "--no-checkout", repo_url, str(codebase_dir)], "partial_blobless")
+
+
+def _clone_remote_codebase(repo_url: str, commit: str, codebase_dir: Path, events_log: Path) -> None:
+    cmd, strategy = _git_clone_command(repo_url, commit, codebase_dir)
+    try:
+        subprocess.run(cmd, check=True)
+        _write_event(events_log, "codebase_clone_strategy", {"strategy": strategy})
+    except subprocess.CalledProcessError:
+        if codebase_dir.exists():
+            shutil.rmtree(codebase_dir)
+        subprocess.run(
+            ["git", "clone", "--quiet", "--no-checkout", repo_url, str(codebase_dir)],
+            check=True,
+        )
+        _write_event(
+            events_log,
+            "codebase_clone_strategy",
+            {"strategy": "full_clone_fallback", "failed_strategy": strategy},
+        )
+
+
+def _prepare_codebase(manifest: RunManifest, run_dir: Path, events_log: Path) -> Path:
+    """Create the per-run checkout used as the agent worktree."""
+    codebase_dir = run_dir / "codebase"
+    if codebase_dir.exists():
+        _write_event(events_log, "codebase_reused", {"path": str(codebase_dir)})
+        return codebase_dir
+
+    repo_url = manifest.codebase.repo_url
+    if repo_url == "builtin:empty":
+        codebase_dir.mkdir(parents=True)
+        (codebase_dir / "README.md").write_text(
+            "# Empty Baseline Codebase\n\n"
+            "This repository exists only so benchmark agents have a valid worktree.\n"
+        )
+        subprocess.run(["git", "-C", str(codebase_dir), "init", "--quiet"], check=True)
+        subprocess.run(["git", "-C", str(codebase_dir), "add", "README.md"], check=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(codebase_dir),
+                "-c",
+                "user.name=Agent Harness",
+                "-c",
+                "user.email=agent-harness@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "Create empty baseline codebase",
+            ],
+            check=True,
+        )
+        _write_event(events_log, "codebase_builtin_created", {"kind": "empty"})
+        return codebase_dir
+
+    _write_event(
+        events_log,
+        "codebase_checkout_start",
+        {"repo_url": repo_url, "commit": manifest.codebase.commit},
+    )
+
+    if Path(repo_url).expanduser().exists():
+        shutil.copytree(Path(repo_url).expanduser(), codebase_dir, symlinks=True)
+    else:
+        _clone_remote_codebase(repo_url, manifest.codebase.commit, codebase_dir, events_log)
+
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "advice.detachedHead=false",
+            "-C",
+            str(codebase_dir),
+            "checkout",
+            "--quiet",
+            manifest.codebase.commit,
+        ],
+        check=True,
+    )
+    _write_event(events_log, "codebase_checkout_end", {"path": str(codebase_dir)})
+    return codebase_dir
+
+
+def _start_kernel_exec_logger(exec_log: Path, events_log: Path) -> subprocess.Popen | None:
+    """Start bpftrace or bcc exec logging when available."""
+    if hasattr(os, "geteuid") and os.geteuid() != 0:
+        _write_event(events_log, "execsnoop_unavailable", {"reason": "requires_root"})
+        return None
+
+    try:
+        from measure.execsnoop_wrap import find_bpftrace, run_bpftrace_snoop
+
+        if find_bpftrace():
+            proc = run_bpftrace_snoop(exec_log)
+            time.sleep(0.15)
+            if proc.poll() is not None:
+                _write_event(
+                    events_log,
+                    "execsnoop_failed",
+                    {"method": "bpftrace", "returncode": proc.returncode},
+                )
+            else:
+                _write_event(events_log, "execsnoop_started", {"method": "bpftrace"})
+                return proc
+    except Exception as exc:
+        _write_event(events_log, "execsnoop_failed", {"method": "bpftrace", "error": str(exc)})
+
+    try:
+        from measure.execsnoop_wrap import find_execsnoop, run_execsnoop_bcc
+
+        if find_execsnoop():
+            proc = run_execsnoop_bcc(exec_log)
+            time.sleep(0.15)
+            if proc.poll() is not None:
+                _write_event(
+                    events_log,
+                    "execsnoop_failed",
+                    {"method": "bcc", "returncode": proc.returncode},
+                )
+            else:
+                _write_event(events_log, "execsnoop_started", {"method": "bcc"})
+                return proc
+    except Exception as exc:
+        _write_event(events_log, "execsnoop_failed", {"method": "bcc", "error": str(exc)})
+
+    return None
+
+
+def _start_fallback_exec_logger(
+    exec_log: Path,
+    events_log: Path,
+    root_pid: int,
+) -> subprocess.Popen | None:
+    try:
+        from measure.execsnoop_wrap import fallback_audit
+
+        proc = fallback_audit(exec_log, root_pid)
+        _write_event(events_log, "execsnoop_started", {"method": "fallback"})
+        return proc
+    except Exception as exc:
+        _write_event(events_log, "execsnoop_failed", {"method": "fallback", "error": str(exc)})
+        return None
+
+
+def _stop_process(proc: subprocess.Popen | None, timeout: float = 5.0) -> None:
+    if proc is None or proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
 
 
 def _run_docker(manifest: RunManifest, run_dir: Path, adapter) -> int:
@@ -88,14 +290,12 @@ def _run_docker(manifest: RunManifest, run_dir: Path, adapter) -> int:
         "--memory", f"{manifest.caps.memory_mb}m" if manifest.caps.memory_mb else "0",
         "--volume", f"{run_dir}:/runs/{manifest.run_id}",
         "--volume", f"{manifest.codebase.repo_url or '/dev/null'}:/codebase:ro",
-        "--workdir", manifest.task.workdir or "/codebase",
+        "--workdir", "/codebase",
         "--env-file", "/dev/null",  # env passed inline below
     ]
 
-    for key, val in adapter.env().items():
-        # Expand ${VAR} references from host environment
-        expanded = os.path.expandvars(val)
-        cmd.extend(["--env", f"{key}={expanded}"])
+    for key, val in _expand_adapter_env(adapter).items():
+        cmd.extend(["--env", f"{key}={val}"])
 
     cmd.append(agent_image)
 
@@ -104,7 +304,7 @@ def _run_docker(manifest: RunManifest, run_dir: Path, adapter) -> int:
         "kind": manifest.task.kind.value,
         "prompt": manifest.task.prompt,
         "repo_path": "/codebase",
-        "workdir": manifest.task.workdir or "/codebase",
+        "workdir": "/codebase",
     }
     cmd.extend([
         "harness", "run-inner",
@@ -127,38 +327,23 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
     exec_log = run_dir / "exec_log.jsonl"
     proc_csv = run_dir / "proc_timeseries.csv"
     events_log = run_dir / "events.jsonl"
+    stdout_path = run_dir / "stdout.log"
+    stderr_path = run_dir / "stderr.log"
 
     # Record start event
     _write_event(events_log, "run_start", {"run_id": manifest.run_id})
-
-    # Start execsnoop in background
-    execsnoop_proc = None
-    try:
-        from measure.execsnoop_wrap import find_bpftrace, run_bpftrace_snoop
-        if find_bpftrace():
-            execsnoop_proc = run_bpftrace_snoop(exec_log)
-            _write_event(events_log, "execsnoop_started", {"method": "bpftrace"})
-    except Exception:
-        pass
-
-    if execsnoop_proc is None:
-        try:
-            from measure.execsnoop_wrap import run_execsnoop_bcc, find_execsnoop
-            if find_execsnoop():
-                execsnoop_proc = run_execsnoop_bcc(exec_log)
-                _write_event(events_log, "execsnoop_started", {"method": "bcc"})
-        except Exception:
-            _write_event(events_log, "execsnoop_failed", {})
+    codebase_dir = _prepare_codebase(manifest, run_dir, events_log)
 
     # Set up PATH shims
     shim_dir = run_dir / "shims"
-    shim_dir.mkdir(exist_ok=True)
-    shim_env = _setup_shims(str(run_dir), shim_dir)
+    shim_env = _setup_shims(shim_dir)
 
     updated_env = os.environ.copy()
     updated_env.update(shim_env)
+    updated_env.update(_expand_adapter_env(adapter))
     updated_env["EXEC_SHIM_LOG"] = str(exec_log)
     updated_env["CGROUP_BASE"] = str(run_dir / "cgroups")
+    updated_env["NO_COLOR"] = "1"
 
     # Apply memory cap if configured
     if manifest.caps.memory_mb:
@@ -177,59 +362,97 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
     task_spec = type("TaskSpec", (), {
         "kind": manifest.task.kind.value,
         "prompt": manifest.task.prompt,
-        "repo_path": str(run_dir / "codebase"),
-        "workdir": str(run_dir / "codebase"),
+        "repo_path": str(codebase_dir),
+        "workdir": str(codebase_dir),
     })()
 
     agent_cmd = adapter.local_command(task_spec)
+    timeout_s = _timeout_s(manifest)
 
-    # Start the /proc sampler in background
-    agent_proc = subprocess.Popen(
-        agent_cmd,
-        env=updated_env,
-        stdout=open(run_dir / "stdout.log", "w"),
-        stderr=open(run_dir / "stderr.log", "w"),
-        cwd=str(run_dir / "codebase"),
-    )
+    execsnoop_proc = _start_kernel_exec_logger(exec_log, events_log)
+    sampler_proc = None
 
-    _write_event(events_log, "agent_started", {"pid": agent_proc.pid, "cmd": agent_cmd})
-
-    # Start sampler
-    from measure.proc_sampler import sample
     sample_start = time.time()
+    timed_out = False
+    exit_code = 127
 
-    try:
-        agent_proc.wait(timeout=manifest.timeout_override or 1800)
-    except subprocess.TimeoutExpired:
-        agent_proc.kill()
-        agent_proc.wait()
-        _write_event(events_log, "agent_timed_out", {})
+    with stdout_path.open("w") as stdout_f, stderr_path.open("w") as stderr_f:
+        try:
+            agent_proc = subprocess.Popen(
+                agent_cmd,
+                env=updated_env,
+                stdout=stdout_f,
+                stderr=stderr_f,
+                cwd=str(codebase_dir),
+            )
+        except FileNotFoundError as exc:
+            _write_event(events_log, "agent_start_failed", {"cmd": agent_cmd, "error": str(exc)})
+            _stop_process(execsnoop_proc)
+            return 127
+
+        _write_event(events_log, "agent_started", {"pid": agent_proc.pid, "cmd": agent_cmd})
+
+        if execsnoop_proc is not None and execsnoop_proc.poll() is not None:
+            _write_event(
+                events_log,
+                "execsnoop_exited_early",
+                {"returncode": execsnoop_proc.returncode},
+            )
+            execsnoop_proc = None
+
+        if execsnoop_proc is None:
+            execsnoop_proc = _start_fallback_exec_logger(exec_log, events_log, agent_proc.pid)
+
+        sampler_proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "measure.proc_sampler",
+                str(agent_proc.pid),
+                str(proc_csv),
+                "--interval",
+                "0.25",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        _write_event(events_log, "sampler_started", {"pid": sampler_proc.pid})
+
+        try:
+            exit_code = agent_proc.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            agent_proc.kill()
+            exit_code = agent_proc.wait()
+            _write_event(events_log, "agent_timed_out", {"timeout_s": timeout_s})
 
     sample_end = time.time()
 
-    # Sampler runs inline (it watches the root PID and exits when it does)
-    # For now, run a post-hoc sampling catch-up
-    # In the real implementation, the sampler runs in a thread alongside agent_proc
-
-    # Stop execsnoop
-    if execsnoop_proc:
-        execsnoop_proc.terminate()
+    if sampler_proc is not None:
         try:
-            execsnoop_proc.wait(timeout=5)
+            sampler_proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            execsnoop_proc.kill()
+            _stop_process(sampler_proc)
+
+    _stop_process(execsnoop_proc)
 
     _write_event(events_log, "run_end", {
-        "exit_code": agent_proc.returncode,
+        "exit_code": exit_code,
+        "timed_out": timed_out,
         "wall_time_s": sample_end - sample_start,
     })
 
     # Convert CSV to parquet if we have data
     if proc_csv.exists() and proc_csv.stat().st_size > 0:
-        from measure.proc_sampler import csv_to_parquet
-        csv_to_parquet(proc_csv, run_dir / "proc_timeseries.parquet")
+        try:
+            from measure.proc_sampler import csv_to_parquet
 
-    return agent_proc.returncode or 0
+            csv_to_parquet(proc_csv, run_dir / "proc_timeseries.parquet")
+            _write_event(events_log, "parquet_written", {"path": str(run_dir / "proc_timeseries.parquet")})
+        except Exception as exc:
+            _write_event(events_log, "parquet_failed", {"error": str(exc)})
+
+    return exit_code
 
 
 def _write_event(events_log: Path, event_type: str, data: dict) -> None:
@@ -249,6 +472,15 @@ def run_one(manifest_path: Path) -> int:
 
     run_dir = manifest_path.parent
     adapter = _load_adapter(manifest.agent)
+    manifest.agent_version = getattr(adapter, "version", manifest.agent_version)
+    manifest.agent_capabilities = vars(getattr(adapter, "capabilities", {}))
+    manifest.hostname = socket.gethostname()
+    try:
+        from measure.host_info import collect_host_info
+
+        manifest.hardware = collect_host_info()
+    except Exception as exc:
+        manifest.caveats.append(f"host_info_unavailable: {exc}")
 
     if manifest.sandbox == "docker":
         exit_code = _run_docker(manifest, run_dir, adapter)
@@ -259,16 +491,22 @@ def run_one(manifest_path: Path) -> int:
     with open(manifest_path, "w") as f:
         f.write(manifest.model_dump_json(indent=2))
 
-    # Write a quick summary
-    summary = {
-        "run_id": manifest.run_id,
-        "agent": manifest.agent,
-        "task": manifest.task.name,
-        "codebase": manifest.codebase.repo_url,
-        "exit_code": exit_code,
-        "started_at": manifest.started_at,
-        "completed_at": manifest.completed_at,
-    }
+    try:
+        from analysis.summarize import summarize_run
+
+        summary = summarize_run(run_dir)
+        summary["exit_code"] = exit_code
+    except Exception as exc:
+        summary = {
+            "run_id": manifest.run_id,
+            "agent": manifest.agent,
+            "task": manifest.task.name,
+            "codebase": manifest.codebase.repo_url,
+            "exit_code": exit_code,
+            "summary_error": str(exc),
+            "started_at": manifest.started_at,
+            "completed_at": manifest.completed_at,
+        }
     with open(run_dir / "summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 

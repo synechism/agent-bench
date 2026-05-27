@@ -1,0 +1,15 @@
+runs/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+.DS_Store
+*.parquet
+*.csv
+*.jsonl
+!tasks/**/*.json
+.env
+.secrets

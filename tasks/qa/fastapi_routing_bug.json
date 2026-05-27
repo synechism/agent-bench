@@ -1,0 +1,16 @@
+{
+  "kind": "qa",
+  "name": "fastapi_routing_bug",
+  "prompt": "A bug report says that FastAPI path parameters with regex constraints (e.g., `{item_id:[0-9]+}`) are not being matched correctly when multiple routes share the same prefix. Read the routing and parameter parsing code to identify the files involved and explain the likely root cause.",
+  "codebase": "fastapi",
+  "oracle": {
+    "relevant_files": [
+      "fastapi/routing.py",
+      "fastapi/params.py",
+      "fastapi/dependencies/utils.py",
+      "tests/test_routing.py"
+    ],
+    "issue_url": "https://github.com/tiangolo/fastapi/issues/fake",
+    "description": "Regex path parameter matching failure with shared prefixes"
+  }
+}

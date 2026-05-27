@@ -1,0 +1,16 @@
+{
+  "kind": "qa",
+  "name": "redis_issue_12345",
+  "prompt": "Investigate and explain which files in the codebase are relevant to fixing the issue where Redis fails to evict expired keys when maxmemory-policy is set to volatile-lru. Read the key files and describe the root cause.",
+  "codebase": "redis",
+  "oracle": {
+    "relevant_files": [
+      "src/evict.c",
+      "src/expire.c",
+      "src/server.c",
+      "src/db.c"
+    ],
+    "issue_url": "https://github.com/redis/redis/issues/12345",
+    "description": "Expired keys not evicted under volatile-lru policy"
+  }
+}

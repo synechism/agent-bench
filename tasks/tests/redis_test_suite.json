@@ -1,0 +1,11 @@
+{
+  "kind": "tests",
+  "name": "redis_test_suite",
+  "prompt": "Run the Redis test suite: `make test`. Report which tests pass and which fail. If any tests fail, report the failure details.",
+  "codebase": "redis",
+  "oracle": {
+    "pass_exit_code": 0,
+    "timeout_s": 600,
+    "description": "Full Redis test suite (make test)"
+  }
+}

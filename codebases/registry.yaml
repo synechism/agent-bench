@@ -1,0 +1,35 @@
+# Codebase registry — pinned repos and commits for reproducible benchmarks.
+# Each entry maps a short name to a repo URL + pinned commit.
+#
+# Selection principle:
+# - Vary ecosystems (Python, Rust, TypeScript, C) to separate agent runtime
+#   overhead from target build/test cost.
+# - Projects with substantial test suites for the "tests" modality.
+# - Projects with well-documented GitHub issues for the "qa" modality.
+
+redis:
+  repo_url: https://github.com/redis/redis
+  commit: "7.2.5"  # stable release tag
+  language: c
+
+fastapi:
+  repo_url: https://github.com/tiangolo/fastapi
+  commit: "0.115.6"
+  language: python
+
+ripgrep:
+  repo_url: https://github.com/BurntSushi/ripgrep
+  commit: "14.1.1"
+  language: rust
+
+shadcn-ui:
+  repo_url: https://github.com/shadcn-ui/ui
+  commit: "0.8.0"
+  language: typescript
+
+# Future additions (week 3+):
+# linux:
+#   repo_url: https://github.com/torvalds/linux
+#   commit: "v6.6"
+#   language: c
+#   note: full build needs 32GB+ RAM and >10GB disk — not a day-1 target

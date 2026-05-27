@@ -1,0 +1,11 @@
+{
+  "agents": ["claude_code", "codex", "pi", "opencode"],
+  "codebases": ["redis", "fastapi", "ripgrep"],
+  "tasks": ["redis_test_suite", "redis_issue_12345", "fastapi_routing_bug", "ripgrep_add_max_filesize"],
+  "memory_caps": [null, 2048, 1024, 512],
+  "repetitions": 5,
+  "sandbox": "local",
+  "runs_dir": "runs",
+  "timeout_per_run": 1800,
+  "log_api_usage": true
+}

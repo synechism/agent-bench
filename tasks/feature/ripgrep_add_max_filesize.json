@@ -1,0 +1,11 @@
+{
+  "kind": "feature",
+  "name": "ripgrep_add_max_filesize",
+  "prompt": "Add a --max-filesize flag to ripgrep that skips files larger than the given size. The flag should accept human-readable sizes like '1M', '500K'. Skip files that exceed the threshold and print a warning to stderr. Add tests for the new flag.",
+  "codebase": "ripgrep",
+  "oracle": {
+    "diff_url": "https://github.com/BurntSushi/ripgrep/commit/abc123",
+    "test_cmd": "cargo test --test integration",
+    "feature_description": "--max-filesize flag for skipping large files"
+  }
+}

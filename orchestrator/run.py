@@ -21,6 +21,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -136,6 +137,35 @@ def _clone_remote_codebase(repo_url: str, commit: str, codebase_dir: Path, event
             "codebase_clone_strategy",
             {"strategy": "full_clone_fallback", "failed_strategy": strategy},
         )
+
+
+def _wrap_with_strace(agent_cmd: list[str], run_dir: Path, events_log: Path) -> list[str]:
+    """Trace child execve calls for exact argv capture when strace is available."""
+    if os.environ.get("HARNESS_STRACE_EXEC", "1") == "0":
+        _write_event(events_log, "strace_exec_disabled", {"reason": "HARNESS_STRACE_EXEC=0"})
+        return agent_cmd
+
+    strace = shutil.which("strace")
+    if not strace:
+        _write_event(events_log, "strace_exec_unavailable", {"reason": "strace_not_found"})
+        return agent_cmd
+
+    log_path = (run_dir / "strace_exec.log").resolve()
+    _write_event(events_log, "strace_exec_enabled", {"path": str(log_path)})
+    return [
+        strace,
+        "-f",
+        "-qq",
+        "-ttt",
+        "-s",
+        "4096",
+        "-e",
+        "trace=execve",
+        "-o",
+        str(log_path),
+        "--",
+        *agent_cmd,
+    ]
 
 
 def _prepare_codebase(manifest: RunManifest, run_dir: Path, events_log: Path) -> Path:
@@ -273,6 +303,36 @@ def _stop_process(proc: subprocess.Popen | None, timeout: float = 5.0) -> None:
         proc.wait()
 
 
+def _stop_process_group(proc: subprocess.Popen | None, timeout: float = 10.0) -> None:
+    if proc is None:
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        _stop_process(proc, timeout=timeout)
+        return
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            try:
+                os.killpg(proc.pid, 0)
+            except ProcessLookupError:
+                return
+        time.sleep(0.1)
+
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        pass
+
+
 def _run_docker(manifest: RunManifest, run_dir: Path, adapter) -> int:
     """Execute the agent inside a Docker container.
 
@@ -324,8 +384,8 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
     """
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    exec_log = run_dir / "exec_log.jsonl"
-    proc_csv = run_dir / "proc_timeseries.csv"
+    exec_log = (run_dir / "exec_log.jsonl").resolve()
+    proc_csv = (run_dir / "proc_timeseries.csv").resolve()
     events_log = run_dir / "events.jsonl"
     stdout_path = run_dir / "stdout.log"
     stderr_path = run_dir / "stderr.log"
@@ -335,14 +395,14 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
     codebase_dir = _prepare_codebase(manifest, run_dir, events_log)
 
     # Set up PATH shims
-    shim_dir = run_dir / "shims"
+    shim_dir = (run_dir / "shims").resolve()
     shim_env = _setup_shims(shim_dir)
 
     updated_env = os.environ.copy()
     updated_env.update(shim_env)
     updated_env.update(_expand_adapter_env(adapter))
     updated_env["EXEC_SHIM_LOG"] = str(exec_log)
-    updated_env["CGROUP_BASE"] = str(run_dir / "cgroups")
+    updated_env["CGROUP_BASE"] = str((run_dir / "cgroups").resolve())
     updated_env["NO_COLOR"] = "1"
 
     # Apply memory cap if configured
@@ -367,6 +427,7 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
     })()
 
     agent_cmd = adapter.local_command(task_spec)
+    launch_cmd = _wrap_with_strace(agent_cmd, run_dir, events_log)
     timeout_s = _timeout_s(manifest)
 
     execsnoop_proc = _start_kernel_exec_logger(exec_log, events_log)
@@ -379,18 +440,23 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
     with stdout_path.open("w") as stdout_f, stderr_path.open("w") as stderr_f:
         try:
             agent_proc = subprocess.Popen(
-                agent_cmd,
+                launch_cmd,
                 env=updated_env,
                 stdout=stdout_f,
                 stderr=stderr_f,
                 cwd=str(codebase_dir),
+                start_new_session=True,
             )
         except FileNotFoundError as exc:
-            _write_event(events_log, "agent_start_failed", {"cmd": agent_cmd, "error": str(exc)})
+            _write_event(events_log, "agent_start_failed", {"cmd": launch_cmd, "error": str(exc)})
             _stop_process(execsnoop_proc)
             return 127
 
-        _write_event(events_log, "agent_started", {"pid": agent_proc.pid, "cmd": agent_cmd})
+        _write_event(
+            events_log,
+            "agent_started",
+            {"pid": agent_proc.pid, "cmd": agent_cmd, "launch_cmd": launch_cmd},
+        )
 
         if execsnoop_proc is not None and execsnoop_proc.poll() is not None:
             _write_event(
@@ -422,11 +488,12 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
             exit_code = agent_proc.wait(timeout=timeout_s)
         except subprocess.TimeoutExpired:
             timed_out = True
-            agent_proc.kill()
+            _stop_process_group(agent_proc)
             exit_code = agent_proc.wait()
             _write_event(events_log, "agent_timed_out", {"timeout_s": timeout_s})
 
     sample_end = time.time()
+    _stop_process_group(agent_proc)
 
     if sampler_proc is not None:
         try:

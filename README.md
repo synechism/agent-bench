@@ -34,8 +34,9 @@ Resource attribution is process-tree based. The runner starts the agent, records
 - USS is recorded as the unique private footprint.
 - PATH shims: per-run shims intercept common commands such as `rg`, `git`, `make`, `pytest`, `python`, `node`, and shell binaries, writing invocation records to that run’s `exec_log.jsonl`.
 - Kernel exec tracing: if root-only `bpftrace`/BCC exec tracing is available, it records every `execve`.
-- Non-root fallback: when eBPF is unavailable, the harness polls `/proc/<pid>/children` to observe descendants, and also parses transcripts where possible.
-- Transcript attribution: Codex transcripts expose exact shell commands; Claude Code headless currently mostly yields observed subprocesses rather than exact argv.
+- Rootless exec tracing: when `strace` is available, local runs wrap the agent with `strace -f -e trace=execve` and write exact argv to `strace_exec.log`.
+- Non-root fallback: when eBPF is unavailable, the harness polls `/proc/<pid>/children` to observe descendants, and also parses transcripts/strace where possible.
+- Transcript/trace attribution: Codex transcripts expose exact shell commands; Claude Code is attributed from strace, including shell commands and Claude's internal `claude.exe` tool launches.
 - Host metadata: each manifest records CPU, RAM, swap, kernel, cgroup limits, and NVIDIA GPU inventory.
 
 Analysis combines these signals into:

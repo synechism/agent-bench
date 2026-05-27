@@ -22,7 +22,9 @@ Category attribution logic:
 from __future__ import annotations
 
 import argparse
+import ast
 import json
+import re
 import shlex
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -157,6 +159,127 @@ def _parse_exec_log(run_dir: Path) -> list[dict]:
     return events
 
 
+_STRACE_EXEC_RE = re.compile(
+    r'^\s*(?P<pid>\d+)\s+(?P<ts>\d+(?:\.\d+)?)\s+'
+    r'execve\("(?P<exe>(?:\\.|[^"])*)",\s+(?P<argv>\[.*\]),\s+.*\)\s+=\s+(?P<result>.+)$'
+)
+
+
+def _decode_c_string(value: str) -> str:
+    try:
+        return ast.literal_eval(f'"{value}"')
+    except (SyntaxError, ValueError):
+        return value
+
+
+def _parse_strace_exec(run_dir: Path) -> list[dict]:
+    """Recover exact execve argv from a rootless strace wrapper."""
+    path = run_dir / "strace_exec.log"
+    if not path.exists():
+        return []
+
+    events: list[dict] = []
+    for line in path.read_text(errors="replace").splitlines():
+        match = _STRACE_EXEC_RE.match(line)
+        if not match:
+            continue
+        if match.group("result").strip() != "0":
+            continue
+
+        exe = _decode_c_string(match.group("exe"))
+        try:
+            argv = ast.literal_eval(match.group("argv"))
+        except (SyntaxError, ValueError):
+            argv = [exe]
+        if not isinstance(argv, list):
+            argv = [exe]
+        argv = [str(arg) for arg in argv]
+
+        shell_command = _extract_claude_shell_command(argv)
+        if shell_command:
+            events.append(
+                {
+                    "source": "claude_shell_command",
+                    "tool": _tool_name_from_command(shell_command),
+                    "argv": shell_command,
+                    "executable": exe,
+                    "pid": int(match.group("pid")),
+                    "ts": float(match.group("ts")),
+                }
+            )
+            continue
+
+        tool = basename(argv[0] if argv else exe)
+        if tool in AGENT_PROCESS_NAMES or tool == "strace":
+            continue
+        if _is_strace_bootstrap_noise(run_dir, exe, argv):
+            continue
+        if _is_claude_internal_tool_exec(exe, argv):
+            events.append(
+                {
+                    "source": "claude_internal_tool",
+                    "tool": tool,
+                    "argv": shlex.join(argv),
+                    "executable": exe,
+                    "pid": int(match.group("pid")),
+                    "ts": float(match.group("ts")),
+                }
+            )
+            continue
+
+        events.append(
+            {
+                "source": "strace_execve",
+                "tool": tool,
+                "argv": shlex.join(argv),
+                "executable": exe,
+                "pid": int(match.group("pid")),
+                "ts": float(match.group("ts")),
+            }
+        )
+    return events
+
+
+def _extract_claude_shell_command(argv: list[str]) -> str | None:
+    """Extract the user command from Claude Code's shell wrapper, if present."""
+    for arg in argv:
+        match = re.search(r"(?:^|&& )eval (?P<command>.+?) < /dev/null", arg, re.S)
+        if match:
+            command = match.group("command").strip()
+            try:
+                decoded = ast.literal_eval(command)
+            except (SyntaxError, ValueError):
+                return command
+            return decoded if isinstance(decoded, str) else command
+    return None
+
+
+def _is_claude_internal_tool_exec(exe: str, argv: list[str]) -> bool:
+    if basename(exe) != "claude.exe" or not argv:
+        return False
+    tool = basename(str(argv[0]))
+    if tool in AGENT_PROCESS_NAMES or tool == "claude.exe":
+        return False
+    return _classify_comm(tool) in {"tool_calling", "test_build_runner"}
+
+
+def _is_strace_bootstrap_noise(run_dir: Path, exe: str, argv: list[str]) -> bool:
+    run_dir_text = str(run_dir.resolve())
+    if exe.startswith(f"{run_dir_text}/shims/"):
+        return True
+    joined = "\n".join([exe, *argv])
+    noise_markers = (
+        ".claude/shell-snapshots",
+        ".oh-my-zsh",
+        ".zcompdump",
+        ".pyenv",
+        "__pycache__",
+        "CLAUDE_CODE_EXECPATH",
+        "snapshot-zsh-",
+    )
+    return any(marker in joined for marker in noise_markers)
+
+
 def _proc_observed_events(run_dir: Path) -> list[dict]:
     ts_path = run_dir / "proc_timeseries.parquet"
     if not ts_path.exists():
@@ -204,6 +327,7 @@ def derive_tool_events(run_dir: Path) -> list[dict]:
     events = []
     events.extend(_parse_exec_log(run_dir))
     events.extend(_parse_codex_transcript(run_dir))
+    events.extend(_parse_strace_exec(run_dir))
     events.extend(_proc_observed_events(run_dir))
     return events
 
@@ -356,16 +480,27 @@ def summarize_run(run_dir: Path) -> dict:
     tool_events = write_tool_events(run_dir)
     by_source: dict[str, int] = defaultdict(int)
     by_tool: dict[str, int] = defaultdict(int)
-    exact_sources = {"shim", "codex_transcript", "execsnoop"}
+    high_level_exact_sources = {
+        "codex_transcript",
+        "claude_internal_tool",
+        "claude_shell_command",
+    }
+    exact_subprocess_sources = {"shim", "execsnoop", "strace_execve"}
     exact_invocations = 0
+    exact_subprocesses = 0
+    exact_execve_subprocesses = 0
     observed_subprocesses = 0
     for event in tool_events:
         source = event.get("source", "unknown")
         tool = event.get("tool", "unknown")
         by_source[source] += 1
         by_tool[tool] += 1
-        if source in exact_sources:
+        if source in high_level_exact_sources:
             exact_invocations += 1
+        elif source in exact_subprocess_sources:
+            exact_subprocesses += 1
+        if source in {"claude_internal_tool", "strace_execve"}:
+            exact_execve_subprocesses += 1
         elif source == "proc_observed":
             observed_subprocesses += 1
 
@@ -374,6 +509,8 @@ def summarize_run(run_dir: Path) -> dict:
     summary["tool_events"] = {
         "total": len(tool_events),
         "exact_invocations": exact_invocations,
+        "exact_subprocesses": exact_subprocesses,
+        "exact_execve_subprocesses": exact_execve_subprocesses,
         "observed_subprocesses": observed_subprocesses,
         "by_source": dict(sorted(by_source.items())),
         "by_tool": dict(sorted(by_tool.items())),

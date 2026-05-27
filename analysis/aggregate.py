@@ -24,6 +24,7 @@ METRIC_NAMES = (
     "wall_time_s",
     "files_grepped",
     "tool_invocations",
+    "observed_subprocesses",
 )
 
 BASELINE_ADJUSTED_METRICS = (
@@ -192,7 +193,10 @@ def aggregate_cell(summaries: list[dict], baseline: dict[str, Any] | None = None
 
     for s in summaries:
         for metric in metrics:
-            val = s.get(metric, 0)
+            if metric == "observed_subprocesses":
+                val = (s.get("tool_events") or {}).get("observed_subprocesses", 0)
+            else:
+                val = s.get(metric, 0)
             if val is not None:
                 metrics[metric].append(float(val))
             if metric in adjusted_metrics and metric in baseline_metrics and val is not None:
@@ -254,8 +258,10 @@ def print_cell_table(cell_key: str, result: dict) -> None:
           f"p90: {m['wall_time_s']['p90']:.0f}s  max: {m['wall_time_s']['max']:.0f}s")
     print(f"  Files Grepped | median: {m['files_grepped']['median']:.0f}  "
           f"max: {m['files_grepped']['max']:.0f}")
-    print(f"  Tool Calls    | median: {m['tool_invocations']['median']:.0f}  "
+    print(f"  Agent Tools   | median: {m['tool_invocations']['median']:.0f}  "
           f"max: {m['tool_invocations']['max']:.0f}")
+    print(f"  Observed Proc | median: {m['observed_subprocesses']['median']:.0f}  "
+          f"max: {m['observed_subprocesses']['max']:.0f}")
 
     if result.get("baseline", {}).get("used"):
         adjusted = result["metrics_minus_baseline"]

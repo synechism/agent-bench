@@ -14,11 +14,16 @@ Each run writes:
 ```
 runs/<run_id>/
   manifest.json
+  agent_context.json
+  docker_run.json
+  docker_image.json
   stdout.log
   stderr.log
   events.jsonl
   exec_log.jsonl
   tool_events.jsonl
+  decision_trace.jsonl
+  decision_trace_summary.json
   proc_timeseries.csv
   proc_timeseries.parquet
   summary.json
@@ -38,6 +43,13 @@ Resource attribution is process-tree based. The runner starts the agent, records
 - Non-root fallback: when eBPF is unavailable, the harness polls `/proc/<pid>/children` to observe descendants, and also parses transcripts/strace where possible.
 - Transcript/trace attribution: Codex transcripts expose exact shell commands; Claude Code is attributed from strace, including shell commands and Claude's internal `claude.exe` tool launches.
 - Host metadata: each manifest records CPU, RAM, swap, kernel, cgroup limits, and NVIDIA GPU inventory.
+- Agent context: `agent_context.json` records the command, non-secret model/provider env,
+  project instruction files, and available skill/plugin/agent inventories that may influence
+  tool use. The artifact explicitly separates available context from actually observed loads.
+- Structured agent streams: future Claude Code runs emit `stream-json`; future Codex runs emit
+  JSONL events so we can join assistant decisions to the next subprocess/tool span.
+- Docker metadata: Docker runs write `docker_run.json` and `docker_image.json` so container
+  image identity is tied to the run.
 
 Analysis combines these signals into:
 
@@ -93,9 +105,14 @@ The most important commands are:
 
 ```bash
 python -m orchestrator.matrix --config harness_config_redis_linux.json --dry-run
-python -m orchestrator.matrix --config harness_config_redis_linux.json --jobs 2
+python -m orchestrator.matrix --config harness_config_redis_linux.json
 python -m analysis.summarize runs/<run_id>
+python -m analysis.hotspots runs/<run_id>
+python -m analysis.behavior_metrics runs/<run_id>
+python -m analysis.decision_trace runs/<run_id>
 python -m analysis.aggregate runs --output runs/aggregate.json
 ```
 
 `agents.md` is the operational notebook: adapter caveats, exact commands, VM details, run history, and next steps live there.
+
+For the planned behavior/hotspot analysis layer, see [docs/instrumentation_plan.md](docs/instrumentation_plan.md).

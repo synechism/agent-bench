@@ -1,8 +1,8 @@
-"""Pi (Google DeepMind) adapter.
+"""Pi adapter.
 
-Pi is a coding agent framework. Verify CLI availability and headless mode on day 1.
-If Pi has no public CLI, this adapter wraps a subprocess invocation of the known
-entrypoint after installation.
+Pi is a lightweight coding-agent toolkit. The Docker image installs the public
+`@earendil-works/pi-coding-agent` package; the exact non-interactive flags still
+need a smoke test before Pi enters the main matrix.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ class PiAdapter(AgentAdapter):
     )
 
     def docker_image(self) -> str:
-        return f"agent-harness/pi:{self.version}"
+        return "agent-harness/pi:latest"
 
     def env(self) -> dict[str, str]:
         return {

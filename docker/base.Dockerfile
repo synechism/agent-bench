@@ -56,9 +56,5 @@ RUN chmod +x /opt/shims/_template.sh && \
         fi; \
     done
 
-ENV PATH=/opt/shims:$PATH
-ENV SHIM_DIR=/opt/shims
-ENV EXEC_SHIM_LOG=/runs/exec_log.jsonl
-
 WORKDIR /codebase
-ENTRYPOINT ["harness", "run"]
+ENTRYPOINT ["harness"]

@@ -32,6 +32,9 @@ harness-matrix = "orchestrator.matrix:main"
 [tool.setuptools.packages.find]
 include = ["orchestrator*", "adapters*", "measure*", "analysis*"]
 
+[tool.setuptools.package-data]
+measure = ["shims/*.sh"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

@@ -141,6 +141,72 @@ def _parse_codex_transcript(run_dir: Path) -> list[dict]:
     return events
 
 
+def _parse_structured_tool_invocations(run_dir: Path) -> list[dict]:
+    """Recover model-level tool calls from JSONL agent streams."""
+    events: list[dict] = []
+    for stream_name in ("stdout.log", "stderr.log"):
+        path = run_dir / stream_name
+        if not path.exists():
+            continue
+        for idx, line in enumerate(path.read_text(errors="replace").splitlines()):
+            if not line.startswith("{"):
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            message = rec.get("message")
+            if isinstance(message, dict):
+                for content in message.get("content") or []:
+                    if not isinstance(content, dict) or content.get("type") != "tool_use":
+                        continue
+                    tool_name = str(content.get("name") or "unknown")
+                    tool_input = content.get("input") if isinstance(content.get("input"), dict) else {}
+                    command = tool_input.get("command") or tool_input.get("pattern") or tool_input.get("file_path") or ""
+                    events.append(
+                        {
+                            "source": "claude_stream_tool",
+                            "tool": tool_name,
+                            "argv": str(command),
+                            "raw": content,
+                            "stream": stream_name,
+                            "line_index": idx,
+                        }
+                    )
+
+            item = rec.get("item")
+            if not isinstance(item, dict) or rec.get("type") != "item.started":
+                continue
+            item_type = item.get("type")
+            if item_type == "command_execution":
+                command = str(item.get("command") or "")
+                inner_command = _shell_inner_command(command)
+                events.append(
+                    {
+                        "source": "codex_json_command",
+                        "tool": _tool_name_from_command(inner_command),
+                        "argv": inner_command,
+                        "raw": item,
+                        "stream": stream_name,
+                        "line_index": idx,
+                    }
+                )
+            elif item_type == "file_change":
+                events.append(
+                    {
+                        "source": "codex_json_file_change",
+                        "tool": "file_change",
+                        "argv": "",
+                        "raw": item,
+                        "stream": stream_name,
+                        "line_index": idx,
+                    }
+                )
+
+    return events
+
+
 def _parse_exec_log(run_dir: Path) -> list[dict]:
     events: list[dict] = []
     for rec in _load_jsonl(run_dir / "exec_log.jsonl"):
@@ -325,6 +391,7 @@ def _proc_observed_events(run_dir: Path) -> list[dict]:
 def derive_tool_events(run_dir: Path) -> list[dict]:
     """Return best-available tool events for non-root and shimmed runs."""
     events = []
+    events.extend(_parse_structured_tool_invocations(run_dir))
     events.extend(_parse_exec_log(run_dir))
     events.extend(_parse_codex_transcript(run_dir))
     events.extend(_parse_strace_exec(run_dir))
@@ -482,6 +549,9 @@ def summarize_run(run_dir: Path) -> dict:
     by_tool: dict[str, int] = defaultdict(int)
     high_level_exact_sources = {
         "codex_transcript",
+        "codex_json_command",
+        "codex_json_file_change",
+        "claude_stream_tool",
         "claude_internal_tool",
         "claude_shell_command",
     }
@@ -516,11 +586,50 @@ def summarize_run(run_dir: Path) -> dict:
         "by_tool": dict(sorted(by_tool.items())),
     }
 
+    try:
+        from analysis.decision_trace import write_decision_trace
+        from analysis.hotspots import write_hotspots
+        from analysis.tool_spans import write_tool_spans
+
+        tool_spans = write_tool_spans(run_dir)
+        hotspots = write_hotspots(run_dir, tool_spans)
+        decision_trace = write_decision_trace(run_dir, tool_spans)
+        summary["behavior"] = {
+            "tool_span_count": len(tool_spans),
+            "top_memory_spans": hotspots.get("top_memory_spans", [])[:5],
+            "top_non_agent_memory_spans": hotspots.get("top_non_agent_memory_spans", [])[:5],
+            "top_high_confidence_non_agent_memory_spans": hotspots.get(
+                "top_high_confidence_non_agent_memory_spans", []
+            )[:5],
+            "top_wall_time_spans": hotspots.get("top_wall_time_spans", [])[:5],
+            "run_peak": hotspots.get("run_peak", {}),
+            "behavior_summary": hotspots.get("behavior", {}),
+            "derived_metrics": hotspots.get("derived_metrics", {}),
+            "decision_trace": decision_trace,
+        }
+    except Exception as exc:
+        summary["behavior"] = {"error": str(exc)}
+
     # Load API usage
     api_path = run_dir / "api_usage.json"
     if api_path.exists():
         with open(api_path) as f:
             summary["api_usage"] = json.load(f)
+
+    agent_context_path = run_dir / "agent_context.json"
+    if agent_context_path.exists():
+        try:
+            context = json.loads(agent_context_path.read_text())
+            summary["agent_context"] = {
+                "available_counts": context.get("available_counts", context.get("loaded_counts", {})),
+                "loaded_counts": context.get("loaded_counts", {}),
+                "load_observability": context.get("load_observability", {}),
+                "project_instruction_files": context.get("project_instruction_files", []),
+                "prompt_reference": context.get("prompt_reference"),
+                "versions": context.get("versions", []),
+            }
+        except json.JSONDecodeError:
+            summary["agent_context"] = {"error": "invalid_json"}
 
     events = _load_jsonl(run_dir / "events.jsonl")
     if events:

@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import re
@@ -25,11 +26,15 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from orchestrator.config import RunManifest
+
+
+SECRET_ENV_MARKERS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "AUTH")
 
 
 def _load_adapter(agent_name: str):
@@ -49,6 +54,10 @@ def _setup_shims(shim_dir: Path) -> dict[str, str]:
     shim_dir.mkdir(parents=True, exist_ok=True)
 
     source_template = Path(__file__).resolve().parents[1] / "measure" / "shims" / "_template.sh"
+    if not source_template.exists():
+        source_template = Path("/opt/shims/_template.sh")
+    if not source_template.exists():
+        raise FileNotFoundError("could not locate measure/shims/_template.sh or /opt/shims/_template.sh")
     template = shim_dir / "_template.sh"
     shutil.copy2(source_template, template)
     template.chmod(0o755)
@@ -333,6 +342,46 @@ def _stop_process_group(proc: subprocess.Popen | None, timeout: float = 10.0) ->
         pass
 
 
+def _observe_stream(
+    stream,
+    stream_name: str,
+    plain_log: Path,
+    observed_log: Path,
+    started_monotonic: float,
+) -> None:
+    line_index = 0
+    with plain_log.open("w") as plain_f, observed_log.open("a") as observed_f:
+        for line in stream:
+            plain_f.write(line)
+            plain_f.flush()
+
+            stripped = line.strip()
+            record = None
+            if stripped.startswith("{"):
+                try:
+                    record = json.loads(stripped)
+                except json.JSONDecodeError:
+                    record = None
+            if record is not None:
+                now = datetime.now(timezone.utc)
+                observed_f.write(
+                    json.dumps(
+                        {
+                            "observer_ts": now.isoformat(),
+                            "observer_epoch_s": now.timestamp(),
+                            "observer_monotonic_s": time.monotonic() - started_monotonic,
+                            "stream": stream_name,
+                            "line_index": line_index,
+                            "record": record,
+                        }
+                    )
+                    + "\n"
+                )
+                observed_f.flush()
+            line_index += 1
+    stream.close()
+
+
 def _run_docker(manifest: RunManifest, run_dir: Path, adapter) -> int:
     """Execute the agent inside a Docker container.
 
@@ -340,40 +389,144 @@ def _run_docker(manifest: RunManifest, run_dir: Path, adapter) -> int:
     """
     agent_image = adapter.docker_image()
     run_dir.mkdir(parents=True, exist_ok=True)
+    run_dir_abs = run_dir.resolve()
+    agent_home = (run_dir / "agent_home").resolve()
+    agent_home.mkdir(parents=True, exist_ok=True)
+    _seed_agent_home(agent_home)
+    inner_manifest_path = run_dir / "manifest.docker_inner.json"
+    inner_manifest = copy.deepcopy(manifest)
+    inner_manifest.sandbox = "local"
+    inner_manifest_path.write_text(inner_manifest.model_dump_json(indent=2))
 
-    # Build docker run command
     cmd = [
         "docker", "run",
         "--rm",
+        "--init",
         "--name", manifest.run_id,
-        "--cpus", str(manifest.caps.cpu_cores) if manifest.caps.cpu_cores else "0",
-        "--memory", f"{manifest.caps.memory_mb}m" if manifest.caps.memory_mb else "0",
-        "--volume", f"{run_dir}:/runs/{manifest.run_id}",
-        "--volume", f"{manifest.codebase.repo_url or '/dev/null'}:/codebase:ro",
-        "--workdir", "/codebase",
-        "--env-file", "/dev/null",  # env passed inline below
+        "--volume", f"{run_dir_abs}:/runs/{manifest.run_id}",
+        "--volume", f"{agent_home}:/home/agent",
+        "--workdir", f"/runs/{manifest.run_id}",
+        "--user", f"{os.getuid()}:{os.getgid()}",
+        "--env", "HOME=/home/agent",
+        "--env", "CODEX_HOME=/home/agent/.codex",
     ]
+    if manifest.caps.cpu_cores:
+        cmd.extend(["--cpus", str(manifest.caps.cpu_cores)])
+    if manifest.caps.memory_mb:
+        cmd.extend(["--memory", f"{manifest.caps.memory_mb}m"])
 
     for key, val in _expand_adapter_env(adapter).items():
         cmd.extend(["--env", f"{key}={val}"])
+    for key in ("HARNESS_STRACE_EXEC", "HARNESS_CAPTURE_TOOL_OUTPUT"):
+        if key in os.environ:
+            cmd.extend(["--env", f"{key}={os.environ[key]}"])
 
-    cmd.append(agent_image)
+    cmd.extend([agent_image, f"/runs/{manifest.run_id}/{inner_manifest_path.name}"])
 
-    # The container entrypoint runs the harness entrypoint
-    task_spec = {
-        "kind": manifest.task.kind.value,
-        "prompt": manifest.task.prompt,
-        "repo_path": "/codebase",
-        "workdir": "/codebase",
-    }
-    cmd.extend([
-        "harness", "run-inner",
-        "--manifest", f"/runs/{manifest.run_id}/manifest.json",
-        "--task", json.dumps(task_spec),
-    ])
+    with (run_dir / "docker_run.json").open("w") as f:
+        json.dump({"command": _redact_docker_command(cmd), "image": agent_image}, f, indent=2)
+    _write_docker_image_metadata(agent_image, run_dir)
 
     result = subprocess.run(cmd, capture_output=False)
+    _scrub_agent_home(agent_home)
     return result.returncode
+
+
+def _is_secret_env_key(key: str) -> bool:
+    upper = key.upper()
+    return any(marker in upper for marker in SECRET_ENV_MARKERS)
+
+
+def _redact_docker_command(cmd: list[str]) -> list[str]:
+    redacted: list[str] = []
+    redact_next_env = False
+    for item in cmd:
+        if redact_next_env:
+            if "=" in item:
+                key, _value = item.split("=", 1)
+                redacted.append(f"{key}=<redacted>" if _is_secret_env_key(key) else item)
+            else:
+                redacted.append(item)
+            redact_next_env = False
+            continue
+        redacted.append(item)
+        if item == "--env":
+            redact_next_env = True
+    return redacted
+
+
+def _scrub_agent_home(agent_home: Path) -> None:
+    """Remove volatile identity/auth state from persisted per-run homes."""
+    for path in (
+        agent_home / ".codex" / "auth.json",
+        agent_home / ".claude" / "auth.json",
+    ):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+    claude_json = agent_home / ".claude.json"
+    if claude_json.exists():
+        claude_json.write_text("{}\n")
+
+
+def _copy_if_exists(src: Path, dst: Path) -> None:
+    if not src.exists() or dst.exists():
+        return
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
+
+
+def _copytree_if_exists(src: Path, dst: Path) -> None:
+    if not src.exists() or dst.exists():
+        return
+    shutil.copytree(src, dst, symlinks=True)
+
+
+def _seed_agent_home(agent_home: Path) -> None:
+    """Seed a per-run writable home with config needed by agent CLIs.
+
+    We avoid mounting the host config directories read-only because several
+    CLIs write caches/session metadata under their home dirs even in ephemeral
+    mode. Copy only config/instruction/plugin-like files; auth remains env-based.
+    """
+    host_home = Path.home()
+
+    host_codex = host_home / ".codex"
+    dst_codex = agent_home / ".codex"
+    for name in ("config.toml", "models_catalog.json"):
+        _copy_if_exists(host_codex / name, dst_codex / name)
+    for name in ("plugins", "skills"):
+        _copytree_if_exists(host_codex / name, dst_codex / name)
+
+    host_claude = host_home / ".claude"
+    dst_claude = agent_home / ".claude"
+    for name in ("settings.json", "settings.local.json", "CLAUDE.md"):
+        _copy_if_exists(host_claude / name, dst_claude / name)
+    for name in ("skills", "agents", "commands"):
+        _copytree_if_exists(host_claude / name, dst_claude / name)
+    claude_json = agent_home / ".claude.json"
+    if not claude_json.exists():
+        claude_json.write_text("{}\n")
+
+
+def _write_docker_image_metadata(agent_image: str, run_dir: Path) -> None:
+    try:
+        result = subprocess.run(
+            ["docker", "image", "inspect", agent_image],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        (run_dir / "docker_image.json").write_text(json.dumps({"error": str(exc)}, indent=2))
+        return
+    if result.returncode == 0:
+        (run_dir / "docker_image.json").write_text(result.stdout)
+    else:
+        (run_dir / "docker_image.json").write_text(
+            json.dumps({"returncode": result.returncode, "stderr": result.stderr}, indent=2)
+        )
 
 
 def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
@@ -389,6 +542,7 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
     events_log = run_dir / "events.jsonl"
     stdout_path = run_dir / "stdout.log"
     stderr_path = run_dir / "stderr.log"
+    structured_observed_path = run_dir / "structured_events_observed.jsonl"
 
     # Record start event
     _write_event(events_log, "run_start", {"run_id": manifest.run_id})
@@ -403,6 +557,7 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
     updated_env.update(_expand_adapter_env(adapter))
     updated_env["EXEC_SHIM_LOG"] = str(exec_log)
     updated_env["CGROUP_BASE"] = str((run_dir / "cgroups").resolve())
+    updated_env["HARNESS_CAPTURE_TOOL_OUTPUT"] = os.environ.get("HARNESS_CAPTURE_TOOL_OUTPUT", "1")
     updated_env["NO_COLOR"] = "1"
 
     # Apply memory cap if configured
@@ -427,6 +582,27 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
     })()
 
     agent_cmd = adapter.local_command(task_spec)
+    try:
+        from measure.agent_context import write_agent_context
+
+        context = write_agent_context(
+            run_dir / "agent_context.json",
+            manifest.agent,
+            agent_cmd,
+            codebase_dir,
+            updated_env,
+        )
+        _write_event(
+            events_log,
+            "agent_context_written",
+            {
+                "path": str(run_dir / "agent_context.json"),
+                "available_counts": context.get("available_counts", {}),
+            },
+        )
+    except Exception as exc:
+        _write_event(events_log, "agent_context_failed", {"error": str(exc)})
+
     launch_cmd = _wrap_with_strace(agent_cmd, run_dir, events_log)
     timeout_s = _timeout_s(manifest)
 
@@ -437,63 +613,89 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
     timed_out = False
     exit_code = 127
 
-    with stdout_path.open("w") as stdout_f, stderr_path.open("w") as stderr_f:
-        try:
-            agent_proc = subprocess.Popen(
-                launch_cmd,
-                env=updated_env,
-                stdout=stdout_f,
-                stderr=stderr_f,
-                cwd=str(codebase_dir),
-                start_new_session=True,
-            )
-        except FileNotFoundError as exc:
-            _write_event(events_log, "agent_start_failed", {"cmd": launch_cmd, "error": str(exc)})
-            _stop_process(execsnoop_proc)
-            return 127
+    stream_started = time.monotonic()
+    try:
+        agent_proc = subprocess.Popen(
+            launch_cmd,
+            env=updated_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=str(codebase_dir),
+            start_new_session=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+    except FileNotFoundError as exc:
+        _write_event(events_log, "agent_start_failed", {"cmd": launch_cmd, "error": str(exc)})
+        _stop_process(execsnoop_proc)
+        return 127
 
+    observer_threads = [
+        threading.Thread(
+            target=_observe_stream,
+            args=(agent_proc.stdout, "stdout", stdout_path, structured_observed_path, stream_started),
+            daemon=True,
+        ),
+        threading.Thread(
+            target=_observe_stream,
+            args=(agent_proc.stderr, "stderr", stderr_path, structured_observed_path, stream_started),
+            daemon=True,
+        ),
+    ]
+    for thread in observer_threads:
+        thread.start()
+    _write_event(
+        events_log,
+        "stream_observer_started",
+        {"path": str(structured_observed_path)},
+    )
+
+    _write_event(
+        events_log,
+        "agent_started",
+        {"pid": agent_proc.pid, "cmd": agent_cmd, "launch_cmd": launch_cmd},
+    )
+
+    if execsnoop_proc is not None and execsnoop_proc.poll() is not None:
         _write_event(
             events_log,
-            "agent_started",
-            {"pid": agent_proc.pid, "cmd": agent_cmd, "launch_cmd": launch_cmd},
+            "execsnoop_exited_early",
+            {"returncode": execsnoop_proc.returncode},
         )
+        execsnoop_proc = None
 
-        if execsnoop_proc is not None and execsnoop_proc.poll() is not None:
-            _write_event(
-                events_log,
-                "execsnoop_exited_early",
-                {"returncode": execsnoop_proc.returncode},
-            )
-            execsnoop_proc = None
+    if execsnoop_proc is None:
+        execsnoop_proc = _start_fallback_exec_logger(exec_log, events_log, agent_proc.pid)
 
-        if execsnoop_proc is None:
-            execsnoop_proc = _start_fallback_exec_logger(exec_log, events_log, agent_proc.pid)
+    sampler_proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "measure.proc_sampler",
+            str(agent_proc.pid),
+            str(proc_csv),
+            "--interval",
+            "0.25",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    _write_event(events_log, "sampler_started", {"pid": sampler_proc.pid})
 
-        sampler_proc = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "measure.proc_sampler",
-                str(agent_proc.pid),
-                str(proc_csv),
-                "--interval",
-                "0.25",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        _write_event(events_log, "sampler_started", {"pid": sampler_proc.pid})
-
-        try:
-            exit_code = agent_proc.wait(timeout=timeout_s)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            _stop_process_group(agent_proc)
-            exit_code = agent_proc.wait()
-            _write_event(events_log, "agent_timed_out", {"timeout_s": timeout_s})
+    try:
+        exit_code = agent_proc.wait(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        _stop_process_group(agent_proc)
+        exit_code = agent_proc.wait()
+        _write_event(events_log, "agent_timed_out", {"timeout_s": timeout_s})
 
     sample_end = time.time()
     _stop_process_group(agent_proc)
+    for thread in observer_threads:
+        thread.join(timeout=5)
 
     if sampler_proc is not None:
         try:

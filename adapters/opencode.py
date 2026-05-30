@@ -20,7 +20,7 @@ class OpenCodeAdapter(AgentAdapter):
     )
 
     def docker_image(self) -> str:
-        return f"agent-harness/opencode:{self.version}"
+        return "agent-harness/opencode:latest"
 
     def env(self) -> dict[str, str]:
         return {

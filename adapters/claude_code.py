@@ -10,6 +10,7 @@ Verified flags (from `claude --help`, May 2026):
   --max-budget-usd <amt>   cap API spend (only with -p)
   --dangerously-skip-permissions   auto-approve all tool calls
   --output-format <fmt>    text (default), json, stream-json
+  --include-hook-events     include hook lifecycle events in stream-json output
   --no-session-persistence  don't save session to disk (only with -p)
 
 This benchmark environment runs Claude Code against DeepSeek V4 through the
@@ -39,7 +40,7 @@ class ClaudeCodeAdapter(AgentAdapter):
     )
 
     def docker_image(self) -> str:
-        return f"agent-harness/claude_code:{self.version}"
+        return "agent-harness/claude_code:latest"
 
     def env(self) -> dict[str, str]:
         return {
@@ -70,6 +71,9 @@ class ClaudeCodeAdapter(AgentAdapter):
             "--max-budget-usd", "5",
             "--dangerously-skip-permissions",
             "--no-session-persistence",
+            "--output-format", "stream-json",
+            "--include-hook-events",
+            "--verbose",
         ]
 
     def local_command(self, task: TaskSpec) -> list[str]:

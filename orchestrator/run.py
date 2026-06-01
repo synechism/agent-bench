@@ -626,6 +626,9 @@ def _run_docker(manifest: RunManifest, run_dir: Path, adapter) -> int:
         "--env", "HOME=/home/agent",
         "--env", "CODEX_HOME=/home/agent/.codex",
     ]
+    prompt_ablations_dir = (Path.cwd() / "prompt_ablations").resolve()
+    if prompt_ablations_dir.exists():
+        cmd.extend(["--volume", f"{prompt_ablations_dir}:/prompt_ablations:ro"])
     if manifest.caps.cpu_cores:
         cmd.extend(["--cpus", str(manifest.caps.cpu_cores)])
     if manifest.caps.memory_mb:

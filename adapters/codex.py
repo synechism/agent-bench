@@ -17,6 +17,8 @@ Wire API: "responses" (configured in config.toml).
 DeepSeek V4 can be enabled for experiment runs with
 CODEX_DEEPSEEK_MOONBRIDGE=1. The Docker image wrapper starts Moon Bridge,
 generates a per-run Codex config, and leaves the user's host Codex config alone.
+Prompt ablations can set CODEX_MODEL_INSTRUCTIONS_FILE to replace the Codex base
+instructions through Codex's model_instructions_file config.
 
 Not available (recorded as caveat): temperature, max-turns.
 """
@@ -59,6 +61,10 @@ class CodexAdapter(AgentAdapter):
             "CODEX_DEEPSEEK_MOONBRIDGE": "${CODEX_DEEPSEEK_MOONBRIDGE}",
             "CODEX_MOONBRIDGE_ADDR": "${CODEX_MOONBRIDGE_ADDR}",
             "MOONBRIDGE_DEEPSEEK_MODEL": "${MOONBRIDGE_DEEPSEEK_MODEL}",
+            "CODEX_MODEL_INSTRUCTIONS_FILE": "${CODEX_MODEL_INSTRUCTIONS_FILE}",
+            "CODEX_DEVELOPER_INSTRUCTIONS": "${CODEX_DEVELOPER_INSTRUCTIONS}",
+            "CODEX_INCLUDE_PERMISSIONS_INSTRUCTIONS": "${CODEX_INCLUDE_PERMISSIONS_INSTRUCTIONS}",
+            "CODEX_INCLUDE_SKILL_INSTRUCTIONS": "${CODEX_INCLUDE_SKILL_INSTRUCTIONS}",
             "NO_COLOR": "1",
         }
 
@@ -80,6 +86,18 @@ class CodexAdapter(AgentAdapter):
         provider_wire_api = os.environ.get("CODEX_PROVIDER_WIRE_API")
         if provider and provider_wire_api:
             flags.extend(["-c", f'model_providers.{provider}.wire_api="{provider_wire_api}"'])
+        model_instructions_file = os.environ.get("CODEX_MODEL_INSTRUCTIONS_FILE")
+        if model_instructions_file:
+            flags.extend(["-c", f'model_instructions_file="{model_instructions_file}"'])
+        developer_instructions = os.environ.get("CODEX_DEVELOPER_INSTRUCTIONS")
+        if developer_instructions:
+            flags.extend(["-c", f"developer_instructions={developer_instructions!r}"])
+        include_permissions = os.environ.get("CODEX_INCLUDE_PERMISSIONS_INSTRUCTIONS")
+        if include_permissions:
+            flags.extend(["-c", f"include_permissions_instructions={include_permissions.lower()}"])
+        include_skills = os.environ.get("CODEX_INCLUDE_SKILL_INSTRUCTIONS")
+        if include_skills:
+            flags.extend(["-c", f"include_skill_instructions={include_skills.lower()}"])
         return flags
 
     def build_command(self, task: TaskSpec) -> list[str]:

@@ -109,8 +109,8 @@ Current benchmark packs include:
 The most important commands are:
 
 ```bash
-python -m orchestrator.matrix --config harness_config_redis_linux.json --dry-run
-python -m orchestrator.matrix --config harness_config_redis_linux.json
+python -m orchestrator.matrix --config harness_configs/harness_config_redis_linux.json --dry-run
+python -m orchestrator.matrix --config harness_configs/harness_config_redis_linux.json
 python -m analysis.summarize runs/<run_id>
 python -m analysis.hotspots runs/<run_id>
 python -m analysis.behavior_metrics runs/<run_id>

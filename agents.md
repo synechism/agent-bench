@@ -83,8 +83,9 @@ Key design points:
 ```
 agent-harness-bench/
 ├── pyproject.toml              # psutil, pandas, pyarrow, pydantic, typer, pyyaml, rich
-├── harness_config.json         # default run matrix config
-├── harness_config_redis_linux.json  # current Redis/Linux eval pack, Docker, parallel_jobs=1
+├── harness_configs/            # run matrix configs
+│   ├── harness_config.json     # default run matrix config
+│   └── harness_config_redis_linux.json  # current Redis/Linux eval pack, Docker, parallel_jobs=1
 ├── Makefile                    # install, build, matrix, dry-run, summarize, aggregate
 ├── .gitignore                  # ignores runs/, __pycache__, *.parquet, *.csv, *.jsonl
 ├── README.md
@@ -232,7 +233,7 @@ agent-harness-bench/
   - Claude Code: `2.1.156`
   - Codex CLI: `0.135.0`
   - Pi: `0.78.0` in the latest DeepSeek image
-- `harness_config_redis_linux.json` is set to Docker mode with `parallel_jobs=1`
+- `harness_configs/harness_config_redis_linux.json` is set to Docker mode with `parallel_jobs=1`
   for robust sequential measurement.
 
 ### OpenCode adapter (placeholder — needs verification)
@@ -312,7 +313,7 @@ contended by another benchmark cell.
 Parallel dispatch is now supported for iteration:
 
 ```bash
-python -m orchestrator.matrix --config harness_config_redis_linux.json --jobs 2
+python -m orchestrator.matrix --config harness_configs/harness_config_redis_linux.json --jobs 2
 ```
 
 This is measurement-safe for memory attribution because every cell has:
@@ -461,15 +462,15 @@ python -m compileall -f analysis orchestrator measure adapters
 Default matrix:
 
 ```bash
-python -m orchestrator.matrix --config harness_config.json --dry-run
-python -m orchestrator.matrix --config harness_config.json
+python -m orchestrator.matrix --config harness_configs/harness_config.json --dry-run
+python -m orchestrator.matrix --config harness_configs/harness_config.json
 ```
 
 Current Redis/Linux eval pack:
 
 ```bash
-python -m orchestrator.matrix --config harness_config_redis_linux.json --dry-run
-python -m orchestrator.matrix --config harness_config_redis_linux.json --jobs 2
+python -m orchestrator.matrix --config harness_configs/harness_config_redis_linux.json --dry-run
+python -m orchestrator.matrix --config harness_configs/harness_config_redis_linux.json --jobs 2
 ```
 
 Summaries and aggregates:
@@ -533,7 +534,7 @@ Oracle philosophy:
 
 1. Write `adapters/<agent>.py` implementing `AgentAdapter`
 2. Write `docker/<agent>.Dockerfile` inheriting from `base`
-3. Add the agent name to `harness_config.json` agents list
+3. Add the agent name to `harness_configs/harness_config.json` agents list
 4. Run `make dry-run` to verify the matrix includes it
 5. Verify the headless command on a trivial task before trust it for real runs
 

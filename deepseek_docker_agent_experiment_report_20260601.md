@@ -324,7 +324,7 @@ Pi DeepSeek:
 
 ```bash
 DEEPSEEK_API_KEY="$ANTHROPIC_AUTH_TOKEN" PI_DEEPSEEK_MODEL=deepseek-v4-pro \
-  python -m orchestrator.matrix --config harness_config_redis_linux_pi_deepseek.json
+  python -m orchestrator.matrix --config harness_configs/harness_config_redis_linux_pi_deepseek.json
 ```
 
 Codex DeepSeek:
@@ -333,7 +333,7 @@ Codex DeepSeek:
 CODEX_DEEPSEEK_MOONBRIDGE=1 CODEX_MODEL=moonbridge \
   CODEX_PROVIDER_BASE_URL=http://127.0.0.1:38440/v1 \
   MOONBRIDGE_DEEPSEEK_MODEL=deepseek-v4-pro \
-  python -m orchestrator.matrix --config harness_config_redis_linux_codex_deepseek.json
+  python -m orchestrator.matrix --config harness_configs/harness_config_redis_linux_codex_deepseek.json
 ```
 
 Claude Code DeepSeek pro-forced:
@@ -344,10 +344,9 @@ ANTHROPIC_DEFAULT_OPUS_MODEL='deepseek-v4-pro[1m]' \
 ANTHROPIC_DEFAULT_SONNET_MODEL='deepseek-v4-pro[1m]' \
 ANTHROPIC_DEFAULT_HAIKU_MODEL='deepseek-v4-pro[1m]' \
 CLAUDE_CODE_SUBAGENT_MODEL='deepseek-v4-pro[1m]' \
-python -m orchestrator.matrix --config harness_config_redis_linux_claude_deepseek_pro.json
+python -m orchestrator.matrix --config harness_configs/harness_config_redis_linux_claude_deepseek_pro.json
 ```
 
 Primary detailed source report:
 
 - `runs/redis_linux_matrix_summary_deepseek_with_pi_20260601.md`
-

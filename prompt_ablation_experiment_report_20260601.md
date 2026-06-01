@@ -49,6 +49,16 @@ New adapter controls:
 Docker now mounts the repo's `prompt_ablations/` directory read-only at
 `/prompt_ablations` so prompt files can be used inside isolated runs.
 
+Harness matrix configs now live under `harness_configs/`. The prompt ablation
+configs used for this report are:
+
+- `harness_configs/harness_config_prompt_ablation_smoke_codex.json`
+- `harness_configs/harness_config_prompt_ablation_smoke_claude.json`
+- `harness_configs/harness_config_prompt_ablation_codex.json`
+- `harness_configs/harness_config_prompt_ablation_claude.json`
+- `harness_configs/harness_config_prompt_ablation_hotspot_codex.json`
+- `harness_configs/harness_config_prompt_ablation_hotspot_claude.json`
+
 ## Ablation Cells
 
 Baseline references:
@@ -72,6 +82,15 @@ Smoke checks:
   `20260601T170603_codex_empty_baseline_empty_task_nocap_rep0`
 - Claude with Codex prompt:
   `20260601T170626_claude_code_empty_baseline_empty_task_nocap_rep0`
+
+Hotspot ablations:
+
+- Codex with Claude-style prompt:
+  `20260601T180855_codex_redis_expire_options_base_redis_expire_conditional_options_nocap_rep0`
+- Claude with Codex prompt:
+  `20260601T181734_claude_code_redis_expire_options_base_redis_expire_conditional_options_nocap_rep0`
+- Claude with Codex prompt and minimal tools:
+  `20260601T182620_claude_code_redis_expire_options_base_redis_expire_conditional_options_nocap_rep0`
 
 All ablation cells succeeded with exit code `0`.
 
@@ -97,6 +116,21 @@ All ablation cells succeeded with exit code `0`.
 | claude_codex_prompt | linux_string_get_size_return_length | yes | 244.0s | 292.8 MB | 38 | 39 | 244.5s | 6.6 MB |
 | claude_codex_prompt_min_tools | linux_string_get_size_return_length | yes | 150.5s | 270.8 MB | 24 | 19 | 152.2s | 2.3 MB |
 | baseline_pi | linux_string_get_size_return_length | yes | 133.8s | 172.2 MB | 20 | 15 | 129.9s | 2.6 MB |
+
+## Redis Memory Hotspot Results
+
+The `redis_expire_conditional_options` feature task was the largest memory
+hotspot in the standardized Redis/Linux matrix, so we reran the prompt/tool
+ablations on that task specifically.
+
+| Label | Success | Wall | PSS | Tools | API | API Wait | Payload | Zero Searches | Read/Edit | Repeated Failures |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| baseline_codex | yes | 889.6s | 514.1 MB | 86 | 81 | 792.0s | 22.0 MB | 88 | 3 | 4 |
+| codex_cc_prompt | yes | 482.9s | 869.2 MB | 56 | 64 | 429.0s | 13.4 MB | 76 | 3 | 1 |
+| baseline_claude | yes | 664.7s | 699.0 MB | 152 | 82 | 914.6s | 18.9 MB | 34 | 3 | 0 |
+| claude_codex_prompt | yes | 493.3s | 670.6 MB | 81 | 67 | 447.3s | 15.0 MB | 33 | 5 | 0 |
+| claude_codex_prompt_min_tools | yes | 324.5s | 706.6 MB | 49 | 42 | 282.5s | 6.8 MB | 34 | 4 | 0 |
+| baseline_pi | yes | 300.2s | 628.0 MB | 57 | 48 | 254.8s | 8.0 MB | 58 | 4 | 0 |
 
 ## Interpretation
 
@@ -173,6 +207,50 @@ That remaining gap is likely runtime/harness architecture: Claude Code's
 process, event stream, session machinery, and DeepSeek Anthropic-compatible
 message path.
 
+### 6. The big Redis hotspot shows prompt/tool changes reduce turns, not always peak memory
+
+On `redis_expire_conditional_options`, prompt/tool ablations again reduced wall
+time, tool calls, API calls, and payload volume.
+
+Codex with the Claude-style prompt improved on most behavioral metrics:
+
+- wall time: `889.6s -> 482.9s`
+- tools: `86 -> 56`
+- API calls: `81 -> 64`
+- API payload: `22.0 MB -> 13.4 MB`
+- repeated failures without intervening edits: `4 -> 1`
+
+However, Codex peak PSS got much worse:
+
+- peak PSS: `514.1 MB -> 869.2 MB`
+
+That is the clearest evidence so far that better-looking agent behavior metrics
+do not automatically imply lower peak memory. The likely driver is command
+shape: the Claude-style prompt made Codex finish faster, but it appears to have
+selected or overlapped heavier Redis build/test subprocesses.
+
+Claude with the Codex prompt improved both wall time and peak memory slightly:
+
+- wall time: `664.7s -> 493.3s`
+- tools: `152 -> 81`
+- API calls: `82 -> 67`
+- peak PSS: `699.0 MB -> 670.6 MB`
+
+Claude with Codex prompt plus minimal tools was the fastest Claude variant:
+
+- wall time: `324.5s`
+- tools: `49`
+- API calls: `42`
+- payload: `6.8 MB`
+
+But its peak PSS was still high:
+
+- peak PSS: `706.6 MB`
+
+So for the largest Redis task, the tool surface strongly controls how many
+agent turns happen, while peak memory is still heavily controlled by repo
+build/test fanout.
+
 ## Tool Behavior Notes
 
 Redis test, Codex with Claude-style prompt:
@@ -194,6 +272,54 @@ Linux return-length, Claude minimal tool surface:
 - This confirms that prompt/tool ablations can reduce turns, but repo build
   behavior still controls peak memory when the agent decides to verify via
   compilation.
+
+## API Observer Results
+
+The observer proxy gave us a clearer view of what the model-facing harness
+actually sent to DeepSeek. It records redacted request/response metadata,
+including request counts, response status, observed model names, payload bytes,
+network wait, prompt-like character counts, and advertised tool schemas.
+
+For all runs included here, the observer saw successful API traffic only:
+
+- Claude-family runs: `223` requests, `223` responses, `0` errors.
+- Codex-family runs: `221` requests, `221` responses, `0` errors.
+- Pi runs: `114` requests, `114` responses, `0` errors.
+
+The model observations matched the expected routing:
+
+- Claude and Pi requests were observed as `deepseek-v4-pro`.
+- Codex requests were observed as `moonbridge`, because Codex talks to the
+  local OpenAI-compatible Moon Bridge, which then routes to DeepSeek.
+
+The observer confirmed that the prompt overrides were real, not just local
+configuration:
+
+- Codex with the Claude-style prompt had nonzero `instructions` payloads.
+- Claude with the Codex prompt had nonzero `system` payloads much larger than
+  the default smoke run.
+- Claude minimal-tool hotspot requests advertised only `Bash`, `Edit`, `Read`,
+  and `Write`.
+
+Aggregated observer evidence:
+
+| Cell | Runs | Requests | Payload | API Wait | Prompt-Like Chars | Advertised Tools |
+|---|---:|---:|---:|---:|---:|---|
+| baseline_claude | 7 | 223 | 54.2 MB | 2821.0s | system `1.15M`, input `25.05M` | full Claude tool surface |
+| baseline_codex | 7 | 221 | 41.4 MB | 1693.5s | instructions `4.74M`, input `1.38M` | Codex tool surface |
+| baseline_pi | 7 | 114 | 21.7 MB | 970.5s | input `5.57M` | `bash`, `edit`, `find`, `grep`, `ls`, `read`, `write` |
+| codex_cc_prompt probes | 3 | 23 | 2.8 MB | 168.8s | instructions `349K`, input `130K` | Codex tool surface |
+| claude_codex_prompt probes | 3 | 70 | 12.0 MB | 558.7s | system `1.29M`, input `3.65M` | full Claude tool surface |
+| claude_codex_min probes | 3 | 43 | 4.8 MB | 351.5s | system `838K`, input `1.82M` | `Bash`, `Edit`, `Read`, `Write` |
+| codex_cc_prompt hotspot | 1 | 64 | 13.4 MB | 429.0s | instructions `972K`, input `401K` | Codex tool surface |
+| claude_codex_prompt hotspot | 1 | 67 | 15.0 MB | 447.3s | system `1.41M`, input `6.63M` | full Claude tool surface |
+| claude_codex_min hotspot | 1 | 42 | 6.8 MB | 282.5s | system `856K`, input `4.18M` | `Bash`, `Edit`, `Read`, `Write` |
+
+The observer results support the central interpretation: prompt content and
+advertised tools change agent behavior before any shell command runs. They also
+show why process-level metrics alone are not enough: two runs can both execute
+Redis builds, but their model-facing context and tool schema can be very
+different.
 
 ## Causal Takeaway
 
@@ -223,10 +349,10 @@ Tool surface and runtime architecture are independently measurable causes.
 
 ## Recommended Next Runs
 
-1. Repeat the same ablations on `redis_expire_conditional_options`, the biggest
-   memory hotspot.
-2. Run N=3 for the two short probes here to separate prompt effects from run
+1. Run N=3 for the hotspot ablations to separate prompt effects from run
    variance.
+2. Add command-level peak attribution for the Codex Claude-prompt hotspot run,
+   where PSS rose to `869.2 MB`.
 3. Add a Pi prompt ablation if Pi supports an equivalent base prompt override.
 4. Split Claude minimal into two cells:
    - Codex prompt only,

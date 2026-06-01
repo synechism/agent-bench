@@ -254,7 +254,7 @@ def dispatch_parallel(cells: list[RunManifest], config: RunConfig, jobs: int) ->
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Build and dispatch the run matrix")
-    p.add_argument("--config", type=Path, default=Path("harness_config.json"),
+    p.add_argument("--config", type=Path, default=Path("harness_configs/harness_config.json"),
                    help="Path to harness config JSON")
     p.add_argument("--tasks-dir", type=Path, default=Path("tasks"),
                    help="Directory containing task definitions")
@@ -272,8 +272,10 @@ def main() -> None:
         config = RunConfig()
     jobs = args.jobs if args.jobs is not None else config.parallel_jobs
 
-    root = args.config.parent if args.config.exists() else Path.cwd()
-    cells = build_matrix(config, root / args.tasks_dir, root / args.registry)
+    root = Path.cwd()
+    tasks_dir = args.tasks_dir if args.tasks_dir.is_absolute() else root / args.tasks_dir
+    registry_path = args.registry if args.registry.is_absolute() else root / args.registry
+    cells = build_matrix(config, tasks_dir, registry_path)
     agents_in_matrix = {cell.agent for cell in cells}
     codebases_in_matrix = {cell.task.codebase for cell in cells}
     tasks_in_matrix = {cell.task.name for cell in cells}

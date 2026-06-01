@@ -16,16 +16,16 @@ build: build-base
 	docker build -t agent-harness/opencode:latest -f docker/opencode.Dockerfile .
 
 matrix:
-	$(PYTHON) -m orchestrator.matrix --config harness_config.json
+	$(PYTHON) -m orchestrator.matrix --config harness_configs/harness_config.json
 
 dry-run:
-	$(PYTHON) -m orchestrator.matrix --config harness_config.json --dry-run
+	$(PYTHON) -m orchestrator.matrix --config harness_configs/harness_config.json --dry-run
 
 redis-linux:
-	$(PYTHON) -m orchestrator.matrix --config harness_config_redis_linux.json
+	$(PYTHON) -m orchestrator.matrix --config harness_configs/harness_config_redis_linux.json
 
 dry-run-redis-linux:
-	$(PYTHON) -m orchestrator.matrix --config harness_config_redis_linux.json --dry-run
+	$(PYTHON) -m orchestrator.matrix --config harness_configs/harness_config_redis_linux.json --dry-run
 
 summarize:
 	$(PYTHON) -m analysis.summarize $(RUN_DIR)

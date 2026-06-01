@@ -612,23 +612,33 @@ def summarize_run(run_dir: Path) -> dict:
     try:
         from analysis.decision_trace import write_decision_trace
         from analysis.hotspots import write_hotspots
+        from analysis.prompt_payloads import write_prompt_payloads
+        from analysis.semantic_context import write_semantic_context
         from analysis.tool_spans import write_tool_spans
 
         tool_spans = write_tool_spans(run_dir)
         hotspots = write_hotspots(run_dir, tool_spans)
         decision_trace = write_decision_trace(run_dir, tool_spans)
+        semantic_context = write_semantic_context(run_dir)
+        prompt_payloads = write_prompt_payloads(run_dir)
         summary["behavior"] = {
             "tool_span_count": len(tool_spans),
             "top_memory_spans": hotspots.get("top_memory_spans", [])[:5],
             "top_non_agent_memory_spans": hotspots.get("top_non_agent_memory_spans", [])[:5],
+            "top_agent_isolated_memory_spans": hotspots.get(
+                "top_agent_isolated_memory_spans", []
+            )[:5],
             "top_high_confidence_non_agent_memory_spans": hotspots.get(
                 "top_high_confidence_non_agent_memory_spans", []
             )[:5],
             "top_wall_time_spans": hotspots.get("top_wall_time_spans", [])[:5],
             "run_peak": hotspots.get("run_peak", {}),
+            "run_peak_agent_isolated": hotspots.get("run_peak_agent_isolated", {}),
             "behavior_summary": hotspots.get("behavior", {}),
             "derived_metrics": hotspots.get("derived_metrics", {}),
             "decision_trace": decision_trace,
+            "semantic_context": semantic_context,
+            "prompt_payloads": prompt_payloads,
         }
     except Exception as exc:
         summary["behavior"] = {"error": str(exc)}

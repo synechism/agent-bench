@@ -1,0 +1,416 @@
+{
+  "rollups": {
+    "codex|baseline|empty_task": {
+      "metrics": {
+        "agent_isolated_peak_pss_mb": {
+          "count": 1,
+          "max": 170.0,
+          "median": 170.0,
+          "min": 170.0
+        },
+        "api_requests": {
+          "count": 1,
+          "max": 1.0,
+          "median": 1.0,
+          "min": 1.0
+        },
+        "carried_memory_chars": {
+          "count": 1,
+          "max": 0.0,
+          "median": 0.0,
+          "min": 0.0
+        },
+        "file_or_tool_output_chars": {
+          "count": 1,
+          "max": 0.0,
+          "median": 0.0,
+          "min": 0.0
+        },
+        "full_peak_pss_mb": {
+          "count": 1,
+          "max": 170.0,
+          "median": 170.0,
+          "min": 170.0
+        },
+        "max_semantic_approx_tokens": {
+          "count": 1,
+          "max": 12302.0,
+          "median": 12302.0,
+          "min": 12302.0
+        },
+        "semantic_growth_chars": {
+          "count": 1,
+          "max": 0.0,
+          "median": 0.0,
+          "min": 0.0
+        },
+        "static_prompt_chars": {
+          "count": 1,
+          "max": 49208.0,
+          "median": 49208.0,
+          "min": 49208.0
+        },
+        "tool_invocations": {
+          "count": 1,
+          "max": 0.0,
+          "median": 0.0,
+          "min": 0.0
+        }
+      },
+      "run_ids": [
+        "20260601T202331_codex_empty_baseline_empty_task_nocap_rep0"
+      ],
+      "runs": 1,
+      "successes": 1
+    },
+    "codex|feature|redis_expire_conditional_options": {
+      "metrics": {
+        "agent_isolated_peak_pss_mb": {
+          "count": 1,
+          "max": 165.0,
+          "median": 165.0,
+          "min": 165.0
+        },
+        "api_requests": {
+          "count": 1,
+          "max": 57.0,
+          "median": 57.0,
+          "min": 57.0
+        },
+        "carried_memory_chars": {
+          "count": 1,
+          "max": 105304.0,
+          "median": 105304.0,
+          "min": 105304.0
+        },
+        "file_or_tool_output_chars": {
+          "count": 1,
+          "max": 68386.0,
+          "median": 68386.0,
+          "min": 68386.0
+        },
+        "full_peak_pss_mb": {
+          "count": 1,
+          "max": 520.0,
+          "median": 520.0,
+          "min": 520.0
+        },
+        "max_semantic_approx_tokens": {
+          "count": 1,
+          "max": 38714.0,
+          "median": 38714.0,
+          "min": 38714.0
+        },
+        "semantic_growth_chars": {
+          "count": 1,
+          "max": 105304.0,
+          "median": 105304.0,
+          "min": 105304.0
+        },
+        "static_prompt_chars": {
+          "count": 1,
+          "max": 49551.0,
+          "median": 49551.0,
+          "min": 49551.0
+        },
+        "tool_invocations": {
+          "count": 1,
+          "max": 65.0,
+          "median": 65.0,
+          "min": 65.0
+        }
+      },
+      "run_ids": [
+        "20260601T202331_codex_redis_expire_options_base_redis_expire_conditional_options_nocap_rep0"
+      ],
+      "runs": 1,
+      "successes": 1
+    },
+    "codex|qa|redis_getex_expired_event": {
+      "metrics": {
+        "agent_isolated_peak_pss_mb": {
+          "count": 1,
+          "max": 167.1,
+          "median": 167.1,
+          "min": 167.1
+        },
+        "api_requests": {
+          "count": 1,
+          "max": 23.0,
+          "median": 23.0,
+          "min": 23.0
+        },
+        "carried_memory_chars": {
+          "count": 1,
+          "max": 32371.0,
+          "median": 32371.0,
+          "min": 32371.0
+        },
+        "file_or_tool_output_chars": {
+          "count": 1,
+          "max": 28478.0,
+          "median": 28478.0,
+          "min": 28478.0
+        },
+        "full_peak_pss_mb": {
+          "count": 1,
+          "max": 167.1,
+          "median": 167.1,
+          "min": 167.1
+        },
+        "max_semantic_approx_tokens": {
+          "count": 1,
+          "max": 20456.0,
+          "median": 20456.0,
+          "min": 20456.0
+        },
+        "semantic_growth_chars": {
+          "count": 1,
+          "max": 32371.0,
+          "median": 32371.0,
+          "min": 32371.0
+        },
+        "static_prompt_chars": {
+          "count": 1,
+          "max": 49451.0,
+          "median": 49451.0,
+          "min": 49451.0
+        },
+        "tool_invocations": {
+          "count": 1,
+          "max": 27.0,
+          "median": 27.0,
+          "min": 27.0
+        }
+      },
+      "run_ids": [
+        "20260601T202331_codex_redis_getex_expire_event_base_redis_getex_expired_event_nocap_rep0"
+      ],
+      "runs": 1,
+      "successes": 1
+    },
+    "codex|tests|redis_getex_expired_event_tests": {
+      "metrics": {
+        "agent_isolated_peak_pss_mb": {
+          "count": 1,
+          "max": 180.2,
+          "median": 180.2,
+          "min": 180.2
+        },
+        "api_requests": {
+          "count": 1,
+          "max": 112.0,
+          "median": 112.0,
+          "min": 112.0
+        },
+        "carried_memory_chars": {
+          "count": 1,
+          "max": 112107.0,
+          "median": 112107.0,
+          "min": 112107.0
+        },
+        "file_or_tool_output_chars": {
+          "count": 1,
+          "max": 82403.0,
+          "median": 82403.0,
+          "min": 82403.0
+        },
+        "full_peak_pss_mb": {
+          "count": 1,
+          "max": 180.2,
+          "median": 180.2,
+          "min": 180.2
+        },
+        "max_semantic_approx_tokens": {
+          "count": 1,
+          "max": 40398.0,
+          "median": 40398.0,
+          "min": 40398.0
+        },
+        "semantic_growth_chars": {
+          "count": 1,
+          "max": 112107.0,
+          "median": 112107.0,
+          "min": 112107.0
+        },
+        "static_prompt_chars": {
+          "count": 1,
+          "max": 49482.0,
+          "median": 49482.0,
+          "min": 49482.0
+        },
+        "tool_invocations": {
+          "count": 1,
+          "max": 123.0,
+          "median": 123.0,
+          "min": 123.0
+        }
+      },
+      "run_ids": [
+        "20260601T202331_codex_redis_getex_expire_event_base_redis_getex_expired_event_tests_nocap_rep0"
+      ],
+      "runs": 1,
+      "successes": 1
+    }
+  },
+  "runs": [
+    {
+      "agent": "codex",
+      "agent_isolated_peak_pss_mb": 170.0,
+      "api_requests": 1,
+      "assistant_reasoning_chars": 0,
+      "base_instructions_chars": 21437,
+      "capture_present": true,
+      "carried_memory_chars": 0,
+      "codebase": "empty_baseline",
+      "compaction_seen": false,
+      "developer_context_chars": 4997,
+      "exit_code": 0,
+      "file_or_tool_output_chars": 0,
+      "full_peak_pss_mb": 170.0,
+      "largest_retained_tool_outputs": [],
+      "max_body_approx_tokens": 12499,
+      "max_semantic_approx_tokens": 12302,
+      "max_semantic_chars": 49208,
+      "max_tool_output_delta_chars": null,
+      "max_tool_output_delta_request": null,
+      "prompt_payload_report": "runs/20260601T202331_codex_empty_baseline_empty_task_nocap_rep0/prompt_payload_report.md",
+      "run_id": "20260601T202331_codex_empty_baseline_empty_task_nocap_rep0",
+      "semantic_growth_chars": 0,
+      "static_prompt_chars": 49208,
+      "success": true,
+      "task": "empty_task",
+      "task_kind": "baseline",
+      "tool_call_memory_chars": null,
+      "tool_invocations": 0,
+      "tool_output_memory_chars": null,
+      "tool_schema_chars": 22423,
+      "user_or_task_chars": 351,
+      "wall_time_s": 7.1,
+      "window_count": 1
+    },
+    {
+      "agent": "codex",
+      "agent_isolated_peak_pss_mb": 165.0,
+      "api_requests": 57,
+      "assistant_reasoning_chars": 366,
+      "base_instructions_chars": 21437,
+      "capture_present": true,
+      "carried_memory_chars": 105304,
+      "codebase": "redis_expire_options_base",
+      "compaction_seen": false,
+      "developer_context_chars": 4997,
+      "exit_code": 0,
+      "file_or_tool_output_chars": 68386,
+      "full_peak_pss_mb": 520.0,
+      "largest_retained_tool_outputs": [
+        "13820 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '250,604p' tests/unit/expire.tcl\\\"}\", \"call_id\": \"call_00_2egFFe7ZsRwL9pg2DNKn3805\", \"name\": \"exec_command\"}",
+        "5305 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '80,250p' tests/unit/expire.tcl\\\"}\", \"call_id\": \"call_00_JTNyVIKvsPFg14aiZznq3123\", \"name\": \"exec_command\"}",
+        "4465 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"cd /runs/20260601T202331_codex_redis_expire_options_base_redis_expire_conditional_options_nocap_rep0/codebase && make distclean 2>&1 && make -j$(nproc) M",
+        "3569 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '460,540p' src/expire.c\\\"}\", \"call_id\": \"call_00_YMDlypxrTTNbEFTnTUpC6536\", \"name\": \"exec_command\"}",
+        "3495 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '496,580p' src/expire.c\\\"}\", \"call_id\": \"call_00_XGzzZcbFNyoVBds1BQnC9221\", \"name\": \"exec_command\"}"
+      ],
+      "max_body_approx_tokens": 41660,
+      "max_semantic_approx_tokens": 38714,
+      "max_semantic_chars": 154855,
+      "max_tool_output_delta_chars": 14698,
+      "max_tool_output_delta_request": 13,
+      "prompt_payload_report": "runs/20260601T202331_codex_redis_expire_options_base_redis_expire_conditional_options_nocap_rep0/prompt_payload_report.md",
+      "run_id": "20260601T202331_codex_redis_expire_options_base_redis_expire_conditional_options_nocap_rep0",
+      "semantic_growth_chars": 105304,
+      "static_prompt_chars": 49551,
+      "success": true,
+      "task": "redis_expire_conditional_options",
+      "task_kind": "feature",
+      "tool_call_memory_chars": 36552,
+      "tool_invocations": 65,
+      "tool_output_memory_chars": 68386,
+      "tool_schema_chars": 22423,
+      "user_or_task_chars": 694,
+      "wall_time_s": 372.1,
+      "window_count": 1
+    },
+    {
+      "agent": "codex",
+      "agent_isolated_peak_pss_mb": 167.1,
+      "api_requests": 23,
+      "assistant_reasoning_chars": 117,
+      "base_instructions_chars": 21437,
+      "capture_present": true,
+      "carried_memory_chars": 32371,
+      "codebase": "redis_getex_expire_event_base",
+      "compaction_seen": false,
+      "developer_context_chars": 4997,
+      "exit_code": 0,
+      "file_or_tool_output_chars": 28478,
+      "full_peak_pss_mb": 167.1,
+      "largest_retained_tool_outputs": [
+        "4391 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '1713,1810p' src/db.c\\\"}\", \"call_id\": \"call_00_ET_8Hc36GMqzoVra3CCLuEY5547\", \"name\": \"exec_command\"}",
+        "4187 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '342,440p' src/t_string.c\\\"}\", \"call_id\": \"call_00_t1boMMjcDgu52KPvOLvQ2253\", \"name\": \"exec_command\"}",
+        "2853 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '44,100p' src/db.c\\\"}\", \"call_id\": \"call_00_SzYPIsSqriKDN315zAwg0974\", \"name\": \"exec_command\"}",
+        "2585 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '1618,1680p' src/db.c\\\"}\", \"call_id\": \"call_00_ET_vKcw7pkYzkeZXr8dpuHW1695\", \"name\": \"exec_command\"}",
+        "2523 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '600,660p' src/expire.c\\\"}\", \"call_id\": \"call_00_5KHhTpBEvaq92bKTY04w5411\", \"name\": \"exec_command\"}"
+      ],
+      "max_body_approx_tokens": 21633,
+      "max_semantic_approx_tokens": 20456,
+      "max_semantic_chars": 81822,
+      "max_tool_output_delta_chars": 4391,
+      "max_tool_output_delta_request": 10,
+      "prompt_payload_report": "runs/20260601T202331_codex_redis_getex_expire_event_base_redis_getex_expired_event_nocap_rep0/prompt_payload_report.md",
+      "run_id": "20260601T202331_codex_redis_getex_expire_event_base_redis_getex_expired_event_nocap_rep0",
+      "semantic_growth_chars": 32371,
+      "static_prompt_chars": 49451,
+      "success": true,
+      "task": "redis_getex_expired_event",
+      "task_kind": "qa",
+      "tool_call_memory_chars": 3776,
+      "tool_invocations": 27,
+      "tool_output_memory_chars": 28478,
+      "tool_schema_chars": 22423,
+      "user_or_task_chars": 594,
+      "wall_time_s": 162.5,
+      "window_count": 1
+    },
+    {
+      "agent": "codex",
+      "agent_isolated_peak_pss_mb": 180.2,
+      "api_requests": 112,
+      "assistant_reasoning_chars": 674,
+      "base_instructions_chars": 21437,
+      "capture_present": true,
+      "carried_memory_chars": 112107,
+      "codebase": "redis_getex_expire_event_base",
+      "compaction_seen": false,
+      "developer_context_chars": 4997,
+      "exit_code": 0,
+      "file_or_tool_output_chars": 82403,
+      "full_peak_pss_mb": 180.2,
+      "largest_retained_tool_outputs": [
+        "4554 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '340,450p' ./src/t_string.c\\\"}\", \"call_id\": \"call_00_2pSeIpYgn5vSfDnB0RsH3475\", \"name\": \"exec_command\"}",
+        "3120 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '570,660p' ./tests/unit/expire.tcl\\\"}\", \"call_id\": \"call_01_ZvNwzd8jlbJDwUNljSIS4512\", \"name\": \"exec_command\"}",
+        "2604 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '250,310p' ./tests/unit/pubsub.tcl\\\"}\", \"call_id\": \"call_01_gfFlyAZXKMJRy8elXjVq9807\", \"name\": \"exec_command\"}",
+        "2583 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '550,620p' ./tests/support/server.tcl\\\"}\", \"call_id\": \"call_00_SPstpKG42lCfNqIX5trM6020\", \"name\": \"exec_command\"}",
+        "2411 chars: {\"arguments\": \"{\\\"cmd\\\": \\\"sed -n '470,530p' ./tests/support/server.tcl\\\"}\", \"call_id\": \"call_00_8E2kDc5lNMjnLGMAX4YC0858\", \"name\": \"exec_command\"}"
+      ],
+      "max_body_approx_tokens": 45033,
+      "max_semantic_approx_tokens": 40398,
+      "max_semantic_chars": 161589,
+      "max_tool_output_delta_chars": 4896,
+      "max_tool_output_delta_request": 11,
+      "prompt_payload_report": "runs/20260601T202331_codex_redis_getex_expire_event_base_redis_getex_expired_event_tests_nocap_rep0/prompt_payload_report.md",
+      "run_id": "20260601T202331_codex_redis_getex_expire_event_base_redis_getex_expired_event_tests_nocap_rep0",
+      "semantic_growth_chars": 112107,
+      "static_prompt_chars": 49482,
+      "success": true,
+      "task": "redis_getex_expired_event_tests",
+      "task_kind": "tests",
+      "tool_call_memory_chars": 29030,
+      "tool_invocations": 123,
+      "tool_output_memory_chars": 82403,
+      "tool_schema_chars": 22423,
+      "user_or_task_chars": 625,
+      "wall_time_s": 570.9,
+      "window_count": 1
+    }
+  ]
+}

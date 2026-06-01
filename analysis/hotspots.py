@@ -11,6 +11,8 @@ from typing import Any
 from analysis.behavior_metrics import write_behavior_metrics
 from analysis.tool_spans import load_jsonl, write_tool_spans
 
+AGENT_ISOLATION_EXCLUDED_CATEGORIES = {"build", "test", "package"}
+
 
 def _load_proc(run_dir: Path):
     ts_path = run_dir / "proc_timeseries.parquet"
@@ -63,6 +65,26 @@ def _non_agent_spans(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         span for span in spans
         if span.get("category") != "agent_runtime" and span.get("kind") != "agent_process"
+    ]
+
+
+def _agent_isolated_spans(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Spans useful for agent-behavior memory attribution.
+
+    Build/test/package commands are legitimate task execution, but they are
+    usually project workload memory rather than semantic agent memory. Keep
+    search/read/edit/VCS/shell spans visible and exclude high-fanout project
+    execution from this view.
+    """
+    return [
+        span
+        for span in spans
+        if str(span.get("category")) not in AGENT_ISOLATION_EXCLUDED_CATEGORIES
+        and span.get("span_role") != "bootstrap"
+        and not (
+            span.get("possible_over_attribution")
+            and span.get("span_role") in {"shell_wrapper", "agent_runtime"}
+        )
     ]
 
 
@@ -122,6 +144,88 @@ def _run_peak(run_dir: Path, spans: list[dict[str, Any]]) -> dict[str, Any]:
             for key, value in sorted(category_pss.items(), key=lambda item: item[1], reverse=True)
         },
         "top_processes_at_peak": peak_processes,
+    }
+
+
+def _build_parent_map(df) -> dict[int, set[int]]:
+    by_parent: dict[int, set[int]] = defaultdict(set)
+    for rec in df[["pid", "ppid"]].drop_duplicates().itertuples(index=False):
+        by_parent[int(rec.ppid)].add(int(rec.pid))
+    return by_parent
+
+
+def _pid_descendants(by_parent: dict[int, set[int]], root_pid: int) -> set[int]:
+    seen: set[int] = set()
+    stack = [root_pid]
+    while stack:
+        pid = stack.pop()
+        if pid in seen:
+            continue
+        seen.add(pid)
+        stack.extend(by_parent.get(pid, set()))
+    return seen
+
+
+def _run_peak_excluding_spans(
+    run_dir: Path,
+    spans: list[dict[str, Any]],
+    excluded_categories: set[str],
+) -> dict[str, Any]:
+    """Approximate process-tree peak after removing project build/test spans."""
+    df = _load_proc(run_dir)
+    if df is None or df.empty:
+        return {}
+
+    by_parent = _build_parent_map(df)
+    excluded_windows: list[tuple[set[int], float, float]] = []
+    max_ts = float(df["ts"].max())
+    for span in spans:
+        if str(span.get("category")) not in excluded_categories:
+            continue
+        if span.get("pid") is None or span.get("start_s") is None:
+            continue
+        descendants = _pid_descendants(by_parent, int(span["pid"]))
+        if not descendants:
+            descendants = {int(span["pid"])}
+        start = max(0.0, float(span["start_s"]) - 0.05)
+        end = float(span.get("end_s") if span.get("end_s") is not None else max_ts) + 0.05
+        excluded_windows.append((descendants, start, end))
+
+    filtered = df
+    for descendants, start, end in excluded_windows:
+        active = (
+            filtered["pid"].isin(descendants)
+            & (filtered["ts"] >= start)
+            & (filtered["ts"] <= end)
+        )
+        filtered = filtered[~active]
+
+    if filtered.empty:
+        return {
+            "excluded_categories": sorted(excluded_categories),
+            "excluded_span_count": len(excluded_windows),
+            "peak_tree_pss": 0,
+            "peak_tree_pss_mb": 0,
+        }
+
+    ticks = filtered.groupby("ts").agg(
+        total_pss=("pss", "sum"),
+        total_uss=("uss", "sum"),
+        total_rss=("rss", "sum"),
+    )
+    peak_ts = float(ticks["total_pss"].idxmax())
+    peak_pss = int(ticks.loc[peak_ts]["total_pss"])
+    return {
+        "excluded_categories": sorted(excluded_categories),
+        "excluded_span_count": len(excluded_windows),
+        "peak_sampled_at": peak_ts,
+        "peak_tree_pss": peak_pss,
+        "peak_tree_pss_mb": _mb(peak_pss),
+        "note": (
+            "Approximate agent-isolated peak: removes sampled rows for PIDs under "
+            "build/test/package spans during those span windows. This is the view "
+            "to use when project compilation/test memory would swamp agent behavior."
+        ),
     }
 
 
@@ -192,8 +296,17 @@ def build_hotspots(run_dir: Path, spans: list[dict[str, Any]] | None = None) -> 
     summary = {
         "run_id": run_dir.name,
         "run_peak": _run_peak(run_dir, spans),
+        "run_peak_agent_isolated": _run_peak_excluding_spans(
+            run_dir,
+            spans,
+            AGENT_ISOLATION_EXCLUDED_CATEGORIES,
+        ),
         "top_memory_spans": _top_spans(spans, "peak_pss"),
         "top_non_agent_memory_spans": _top_spans(_non_agent_spans(spans), "peak_pss"),
+        "top_agent_isolated_memory_spans": _top_spans(
+            _agent_isolated_spans(spans),
+            "peak_pss",
+        ),
         "top_high_confidence_non_agent_memory_spans": _top_spans(
             _high_confidence_spans(_non_agent_spans(spans)),
             "peak_pss",

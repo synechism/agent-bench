@@ -489,7 +489,14 @@ def _write_api_usage_summary(run_dir: Path, events_log: Path) -> None:
                 if model:
                     models[str(model)] = models.get(str(model), 0) + 1
                 for key in ("input", "messages"):
-                    for item in (payload.get(key) or {}).get("messages", []):
+                    input_summary = payload.get(key) or {}
+                    if isinstance(input_summary.get("by_semantic_layer"), dict):
+                        input_chars += sum(
+                            int((rec or {}).get("chars", 0) or 0)
+                            for rec in input_summary["by_semantic_layer"].values()
+                        )
+                        continue
+                    for item in input_summary.get("messages", []):
                         input_chars += int((item.get("content") or {}).get("chars", 0) or 0)
                 instruction_chars += int((payload.get("instructions") or {}).get("chars", 0) or 0)
                 system_chars += int((payload.get("system") or {}).get("chars", 0) or 0)
@@ -641,6 +648,8 @@ def _run_docker(manifest: RunManifest, run_dir: Path, adapter) -> int:
         "HARNESS_CAPTURE_TOOL_OUTPUT",
         "HARNESS_API_OBSERVER",
         "HARNESS_API_OBSERVER_UPSTREAM",
+        "HARNESS_API_OBSERVER_CAPTURE_PROMPTS",
+        "HARNESS_API_OBSERVER_CAPTURE_CHARS",
     ):
         if key in os.environ:
             cmd.extend(["--env", f"{key}={os.environ[key]}"])

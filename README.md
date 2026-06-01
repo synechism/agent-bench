@@ -121,3 +121,5 @@ python -m analysis.aggregate runs --output runs/aggregate.json
 `agents.md` is the operational notebook: adapter caveats, exact commands, VM details, run history, and next steps live there.
 
 For the planned behavior/hotspot analysis layer, see [docs/instrumentation_plan.md](docs/instrumentation_plan.md).
+For a script-by-script guide to the measurement and analysis code, see
+[docs/analysis_measure_scripts.md](docs/analysis_measure_scripts.md).

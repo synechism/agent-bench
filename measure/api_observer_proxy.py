@@ -12,6 +12,7 @@ import hashlib
 import http.client
 import json
 import os
+import re
 import ssl
 import sys
 import threading
@@ -39,6 +40,14 @@ HOP_BY_HOP_HEADERS = {
 
 SECRET_HEADER_MARKERS = ("authorization", "api-key", "x-api-key", "token", "cookie", "secret")
 MAX_LOGGED_ERROR_CHARS = 500
+DEFAULT_CAPTURE_CHARS = 20_000
+SECRET_VALUE_RE = re.compile(
+    r"(?i)\b("
+    r"sk-[a-z0-9_-]{16,}|"
+    r"(?:api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s,;]+|"
+    r"bearer\s+[a-z0-9._~+/=-]{16,}"
+    r")\b"
+)
 
 
 def _utc_now() -> str:
@@ -70,6 +79,79 @@ def _textish_size_and_hash(value: Any) -> dict[str, Any]:
     }
 
 
+def _approx_tokens(chars: int) -> int:
+    return (max(0, chars) + 3) // 4
+
+
+def _capture_enabled() -> bool:
+    return os.environ.get("HARNESS_API_OBSERVER_CAPTURE_PROMPTS", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def _capture_limit() -> int:
+    raw = os.environ.get("HARNESS_API_OBSERVER_CAPTURE_CHARS")
+    if not raw:
+        return DEFAULT_CAPTURE_CHARS
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return DEFAULT_CAPTURE_CHARS
+
+
+def _sanitize_text(text: str) -> str:
+    return SECRET_VALUE_RE.sub("<redacted-secret>", text)
+
+
+def _maybe_capture(value: Any, *, limit: int | None = None) -> dict[str, Any]:
+    if not _capture_enabled():
+        return {}
+    if value is None:
+        text = ""
+    elif isinstance(value, str):
+        text = value
+    else:
+        text = json.dumps(value, sort_keys=True, ensure_ascii=False)
+    text = _sanitize_text(text)
+    max_chars = _capture_limit() if limit is None else max(0, limit)
+    captured = text[:max_chars]
+    return {
+        "capture": captured,
+        "capture_chars": len(captured),
+        "capture_truncated": len(text) > len(captured),
+    }
+
+
+def _maybe_capture_raw_body(body: bytes) -> dict[str, Any]:
+    if not _capture_enabled():
+        return {}
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError:
+        text = body.decode("utf-8", errors="replace")
+    sanitized = _sanitize_text(text)
+    max_chars = _capture_limit()
+    captured = sanitized[:max_chars]
+    return {
+        "request_body_capture": {
+            "chars": len(sanitized),
+            "sha256": _sha256_text(sanitized),
+            "capture": captured,
+            "capture_chars": len(captured),
+            "capture_truncated": len(sanitized) > len(captured),
+        }
+    }
+
+
+def _summary_with_capture(value: Any) -> dict[str, Any]:
+    summary = _textish_size_and_hash(value)
+    summary["approx_tokens"] = _approx_tokens(int(summary.get("chars") or 0))
+    summary.update(_maybe_capture(value))
+    return summary
+
+
 def _content_text(value: Any) -> Any:
     if isinstance(value, str):
         return value
@@ -89,6 +171,11 @@ def _content_text(value: Any) -> Any:
     return value
 
 
+def _message_content_summary(content: Any) -> dict[str, Any]:
+    textish = _content_text(content)
+    return _summary_with_capture(textish)
+
+
 def _summarize_messages(messages: Any) -> dict[str, Any]:
     if not isinstance(messages, list):
         return {"count": 0}
@@ -105,7 +192,7 @@ def _summarize_messages(messages: Any) -> dict[str, Any]:
         summary = {
             "index": index,
             "role": role,
-            "content": _textish_size_and_hash(content),
+            "content": _summary_with_capture(content),
         }
         if "type" in message:
             summary["type"] = message.get("type")
@@ -115,6 +202,97 @@ def _summarize_messages(messages: Any) -> dict[str, Any]:
         "count": len(messages),
         "by_role": by_role,
         "messages": message_summaries,
+    }
+
+
+def _response_item_kind(item: dict[str, Any]) -> tuple[str, str]:
+    item_type = str(item.get("type") or "unknown")
+    role = str(item.get("role") or "unknown")
+    if item_type == "message":
+        if role == "developer":
+            return "developer_context", role
+        if role == "user":
+            return "user_or_task", role
+        if role == "assistant":
+            return "assistant_memory", role
+        return "message_context", role
+    if item_type in {"function_call", "custom_tool_call", "local_shell_call"}:
+        return "tool_call_memory", role
+    if item_type in {"function_call_output", "custom_tool_call_output", "tool_search_output"}:
+        return "tool_output_memory", role
+    if item_type in {"reasoning", "compaction", "context_compaction"}:
+        return "reasoning_or_compaction_memory", role
+    return "other_input", role
+
+
+def _response_item_payload(item: dict[str, Any]) -> Any:
+    item_type = item.get("type")
+    if item_type == "message":
+        return _content_text(item.get("content"))
+    if item_type in {"function_call", "custom_tool_call"}:
+        return {
+            "name": item.get("name"),
+            "call_id": item.get("call_id"),
+            "arguments": item.get("arguments") or item.get("input"),
+        }
+    if item_type == "local_shell_call":
+        return item.get("action") or item
+    if item_type in {"function_call_output", "custom_tool_call_output"}:
+        return item.get("output") or item.get("content")
+    if item_type in {"reasoning", "compaction", "context_compaction"}:
+        return item.get("encrypted_content") or item.get("summary") or item.get("content")
+    if "content" in item:
+        return _content_text(item.get("content"))
+    return item
+
+
+def _summarize_response_input_items(items: Any) -> dict[str, Any]:
+    """Summarize OpenAI Responses API `input` arrays.
+
+    Codex sends `ResponseItem` objects rather than classic chat messages.
+    The old role-only summary hid the expensive pieces: tool outputs, call
+    arguments, encrypted reasoning blobs, and contextual developer messages.
+    """
+    if not isinstance(items, list):
+        return {"count": 0}
+
+    by_type: dict[str, int] = {}
+    by_role: dict[str, int] = {}
+    by_layer: dict[str, dict[str, int]] = {}
+    item_summaries: list[dict[str, Any]] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            item_summaries.append({"index": index, "shape": type(item).__name__})
+            continue
+        item_type = str(item.get("type") or "unknown")
+        layer, role = _response_item_kind(item)
+        by_type[item_type] = by_type.get(item_type, 0) + 1
+        by_role[role] = by_role.get(role, 0) + 1
+        payload = _response_item_payload(item)
+        payload_summary = _summary_with_capture(payload)
+        layer_rec = by_layer.setdefault(layer, {"chars": 0, "approx_tokens": 0, "items": 0})
+        layer_rec["chars"] += int(payload_summary.get("chars") or 0)
+        layer_rec["approx_tokens"] += int(payload_summary.get("approx_tokens") or 0)
+        layer_rec["items"] += 1
+
+        summary: dict[str, Any] = {
+            "index": index,
+            "type": item_type,
+            "role": role,
+            "semantic_layer": layer,
+            "payload": payload_summary,
+        }
+        for key in ("call_id", "name", "status"):
+            if key in item and not isinstance(item[key], (dict, list)):
+                summary[key] = item[key]
+        item_summaries.append(summary)
+
+    return {
+        "count": len(items),
+        "by_type": dict(sorted(by_type.items())),
+        "by_role": dict(sorted(by_role.items())),
+        "by_semantic_layer": dict(sorted(by_layer.items())),
+        "items": item_summaries,
     }
 
 
@@ -137,7 +315,7 @@ def _summarize_tools(tools: Any) -> dict[str, Any]:
     return {
         "count": len(tools),
         "names": sorted(set(names)),
-        "schema": _json_size_and_hash(tools),
+        "schema": {**_json_size_and_hash(tools), "approx_tokens": _approx_tokens(len(json.dumps(tools, sort_keys=True, separators=(",", ":"), ensure_ascii=False))), **_maybe_capture(tools)},
     }
 
 
@@ -153,15 +331,41 @@ def _summarize_request_json(data: Any) -> dict[str, Any]:
             summary[key] = data[key]
 
     if "instructions" in data:
-        summary["instructions"] = _textish_size_and_hash(data.get("instructions"))
+        summary["instructions"] = _summary_with_capture(data.get("instructions"))
     if "system" in data:
-        summary["system"] = _textish_size_and_hash(data.get("system"))
+        summary["system"] = _summary_with_capture(data.get("system"))
     if "messages" in data:
         summary["messages"] = _summarize_messages(data.get("messages"))
     if "input" in data:
-        summary["input"] = _summarize_messages(data.get("input"))
+        input_value = data.get("input")
+        if isinstance(input_value, list) and any(
+            isinstance(item, dict) and "type" in item for item in input_value
+        ):
+            summary["input"] = _summarize_response_input_items(input_value)
+        else:
+            summary["input"] = _summarize_messages(input_value)
     if "tools" in data:
         summary["tools"] = _summarize_tools(data.get("tools"))
+
+    semantic_layers: dict[str, dict[str, int]] = {}
+
+    def add_layer(name: str, chars: int) -> None:
+        rec = semantic_layers.setdefault(name, {"chars": 0, "approx_tokens": 0})
+        rec["chars"] += chars
+        rec["approx_tokens"] += _approx_tokens(chars)
+
+    if isinstance(summary.get("instructions"), dict):
+        add_layer("base_instructions", int(summary["instructions"].get("chars") or 0))
+    if isinstance(summary.get("system"), dict):
+        add_layer("system_instructions", int(summary["system"].get("chars") or 0))
+    if isinstance(summary.get("tools"), dict):
+        add_layer("tool_schema", int((summary["tools"].get("schema") or {}).get("chars") or 0))
+    input_summary = summary.get("input")
+    if isinstance(input_summary, dict):
+        for layer, rec in (input_summary.get("by_semantic_layer") or {}).items():
+            add_layer(str(layer), int(rec.get("chars") or 0))
+    if semantic_layers:
+        summary["semantic_layers"] = dict(sorted(semantic_layers.items()))
 
     summary["body"] = _json_size_and_hash(data)
     return summary
@@ -266,6 +470,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             "headers": _safe_headers(self.headers),
         }
         if body:
+            request_summary.update(_maybe_capture_raw_body(body))
             try:
                 request_summary["json"] = _summarize_request_json(json.loads(body.decode("utf-8")))
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:

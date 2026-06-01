@@ -125,6 +125,22 @@ def _load_structured_file_accesses(run_dir: Path) -> dict[str, set[str]]:
         record = observed.get("record")
         if not isinstance(record, dict):
             continue
+
+        if record.get("type") == "tool_execution_start":
+            tool_name = str(record.get("toolName") or "")
+            tool_input = record.get("args") if isinstance(record.get("args"), dict) else {}
+            file_path = _normalize_repo_path(
+                run_dir,
+                tool_input.get("path") or tool_input.get("file_path"),
+            )
+            if not file_path:
+                continue
+            if tool_name == "read":
+                reads.add(file_path)
+            elif tool_name in {"edit", "write"}:
+                edits.add(file_path)
+            continue
+
         message = record.get("message")
         if not isinstance(message, dict):
             continue

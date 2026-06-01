@@ -30,6 +30,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from orchestrator.config import RunManifest
 
@@ -312,6 +313,221 @@ def _stop_process(proc: subprocess.Popen | None, timeout: float = 5.0) -> None:
         proc.wait()
 
 
+def _find_free_tcp_port(host: str = "127.0.0.1") -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind((host, 0))
+        return int(sock.getsockname()[1])
+
+
+def _wait_for_tcp(host: str, port: int, timeout_s: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=0.25):
+                return True
+        except OSError:
+            time.sleep(0.05)
+    return False
+
+
+def _api_observer_enabled() -> bool:
+    return os.environ.get("HARNESS_API_OBSERVER", "1") not in {"0", "false", "False", "no"}
+
+
+def _redact_url_for_log(url: str) -> str:
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    if parts.port is not None:
+        host = f"{host}:{parts.port}"
+    return urlunsplit((parts.scheme, host, parts.path, "<redacted>" if parts.query else "", ""))
+
+
+def _api_observer_upstream(agent: str, env: dict[str, str]) -> tuple[str, str] | None:
+    if agent == "claude_code":
+        upstream = os.environ.get("HARNESS_API_OBSERVER_UPSTREAM") or env.get("ANTHROPIC_BASE_URL")
+        if upstream:
+            return "anthropic", upstream.rstrip("/")
+    if agent == "codex":
+        upstream = (
+            os.environ.get("HARNESS_API_OBSERVER_UPSTREAM")
+            or env.get("CODEX_PROVIDER_BASE_URL")
+            or env.get("OPENAI_BASE_URL")
+        )
+        if upstream:
+            return "openai", upstream.rstrip("/")
+    if agent == "pi":
+        upstream = (
+            os.environ.get("HARNESS_API_OBSERVER_UPSTREAM")
+            or env.get("PI_DEEPSEEK_BASE_URL")
+            or "https://api.deepseek.com"
+        )
+        if upstream:
+            return "openai", upstream.rstrip("/")
+    return None
+
+
+def _rewrite_command_arg_url(command: list[str], original: str, replacement: str) -> list[str]:
+    rewritten: list[str] = []
+    for arg in command:
+        rewritten.append(arg.replace(original, replacement))
+    return rewritten
+
+
+def _configure_api_observer(
+    agent: str,
+    run_dir: Path,
+    env: dict[str, str],
+    agent_cmd: list[str],
+    events_log: Path,
+) -> tuple[subprocess.Popen | None, list[str]]:
+    if not _api_observer_enabled():
+        _write_event(events_log, "api_observer_disabled", {"reason": "HARNESS_API_OBSERVER=0"})
+        return None, agent_cmd
+
+    upstream_info = _api_observer_upstream(agent, env)
+    if upstream_info is None:
+        _write_event(events_log, "api_observer_unavailable", {"reason": "no_supported_upstream"})
+        return None, agent_cmd
+
+    provider, upstream = upstream_info
+    host = "127.0.0.1"
+    port = _find_free_tcp_port(host)
+    proxy_base = f"http://{host}:{port}"
+    log_path = (run_dir / "api_requests.jsonl").resolve()
+    ready_path = (run_dir / "api_observer_ready.json").resolve()
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "measure.api_observer_proxy",
+            "--listen-host",
+            host,
+            "--port",
+            str(port),
+            "--upstream",
+            upstream,
+            "--provider",
+            provider,
+            "--log",
+            str(log_path),
+            "--ready-file",
+            str(ready_path),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    if not _wait_for_tcp(host, port):
+        _stop_process_group(proc, timeout=2)
+        _write_event(events_log, "api_observer_failed", {"reason": "proxy_not_ready"})
+        return None, agent_cmd
+
+    if agent == "claude_code":
+        env["HARNESS_API_OBSERVER_UPSTREAM"] = upstream
+        env["ANTHROPIC_BASE_URL"] = proxy_base
+    elif agent == "codex":
+        proxy_provider_base = proxy_base
+        if upstream.rstrip("/").endswith("/v1") and not proxy_provider_base.endswith("/v1"):
+            proxy_provider_base = f"{proxy_provider_base}/v1"
+        env["HARNESS_API_OBSERVER_UPSTREAM"] = upstream
+        if env.get("CODEX_PROVIDER_BASE_URL"):
+            env["CODEX_PROVIDER_BASE_URL"] = proxy_provider_base
+            agent_cmd = _rewrite_command_arg_url(agent_cmd, upstream, proxy_provider_base)
+        elif env.get("OPENAI_BASE_URL"):
+            env["OPENAI_BASE_URL"] = proxy_provider_base
+    elif agent == "pi":
+        env["HARNESS_API_OBSERVER_UPSTREAM"] = upstream
+        env["PI_DEEPSEEK_BASE_URL"] = proxy_base
+
+    _write_event(
+        events_log,
+        "api_observer_started",
+        {
+            "pid": proc.pid,
+            "provider": provider,
+            "proxy_base": proxy_base,
+            "upstream": _redact_url_for_log(upstream),
+            "log": str(log_path),
+        },
+    )
+    return proc, agent_cmd
+
+
+def _write_api_usage_summary(run_dir: Path, events_log: Path) -> None:
+    path = run_dir / "api_requests.jsonl"
+    if not path.exists():
+        return
+    requests = 0
+    responses = 0
+    errors = 0
+    request_bytes = 0
+    response_bytes = 0
+    duration_s = 0.0
+    models: dict[str, int] = {}
+    statuses: dict[str, int] = {}
+    providers: dict[str, int] = {}
+    tool_names: dict[str, int] = {}
+    input_chars = 0
+    instruction_chars = 0
+    system_chars = 0
+    with path.open() as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            provider = str(record.get("provider", "unknown"))
+            providers[provider] = providers.get(provider, 0) + 1
+            event = record.get("event")
+            if event == "api_request":
+                requests += 1
+                request_bytes += int(record.get("request_bytes", 0) or 0)
+                payload = record.get("json") or {}
+                model = payload.get("model")
+                if model:
+                    models[str(model)] = models.get(str(model), 0) + 1
+                for key in ("input", "messages"):
+                    for item in (payload.get(key) or {}).get("messages", []):
+                        input_chars += int((item.get("content") or {}).get("chars", 0) or 0)
+                instruction_chars += int((payload.get("instructions") or {}).get("chars", 0) or 0)
+                system_chars += int((payload.get("system") or {}).get("chars", 0) or 0)
+                for name in (payload.get("tools") or {}).get("names", []):
+                    tool_names[str(name)] = tool_names.get(str(name), 0) + 1
+            elif event == "api_response":
+                responses += 1
+                response_bytes += int(record.get("response_bytes", 0) or 0)
+                duration_s += float(record.get("duration_s", 0.0) or 0.0)
+                status = str(record.get("status", "unknown"))
+                statuses[status] = statuses.get(status, 0) + 1
+            elif event == "api_error":
+                errors += 1
+                duration_s += float(record.get("duration_s", 0.0) or 0.0)
+
+    summary = {
+        "observer": "api_observer_proxy",
+        "request_count": requests,
+        "response_count": responses,
+        "error_count": errors,
+        "request_bytes": request_bytes,
+        "response_bytes": response_bytes,
+        "network_wait_s_observed": round(duration_s, 6),
+        "models": dict(sorted(models.items())),
+        "statuses": dict(sorted(statuses.items())),
+        "providers": dict(sorted(providers.items())),
+        "tool_names": dict(sorted(tool_names.items())),
+        "prompt_like_chars": {
+            "instructions": instruction_chars,
+            "system": system_chars,
+            "input_or_messages": input_chars,
+        },
+        "raw_log": "api_requests.jsonl",
+    }
+    (run_dir / "api_usage.json").write_text(json.dumps(summary, indent=2) + "\n")
+    _write_event(events_log, "api_usage_written", {"path": str(run_dir / "api_usage.json")})
+
+
 def _stop_process_group(proc: subprocess.Popen | None, timeout: float = 10.0) -> None:
     if proc is None:
         return
@@ -417,7 +633,12 @@ def _run_docker(manifest: RunManifest, run_dir: Path, adapter) -> int:
 
     for key, val in _expand_adapter_env(adapter).items():
         cmd.extend(["--env", f"{key}={val}"])
-    for key in ("HARNESS_STRACE_EXEC", "HARNESS_CAPTURE_TOOL_OUTPUT"):
+    for key in (
+        "HARNESS_STRACE_EXEC",
+        "HARNESS_CAPTURE_TOOL_OUTPUT",
+        "HARNESS_API_OBSERVER",
+        "HARNESS_API_OBSERVER_UPSTREAM",
+    ):
         if key in os.environ:
             cmd.extend(["--env", f"{key}={os.environ[key]}"])
 
@@ -582,6 +803,13 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
     })()
 
     agent_cmd = adapter.local_command(task_spec)
+    api_observer_proc, agent_cmd = _configure_api_observer(
+        manifest.agent,
+        run_dir,
+        updated_env,
+        agent_cmd,
+        events_log,
+    )
     try:
         from measure.agent_context import write_agent_context
 
@@ -630,6 +858,8 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
     except FileNotFoundError as exc:
         _write_event(events_log, "agent_start_failed", {"cmd": launch_cmd, "error": str(exc)})
         _stop_process(execsnoop_proc)
+        _stop_process_group(api_observer_proc, timeout=2)
+        _write_api_usage_summary(run_dir, events_log)
         return 127
 
     observer_threads = [
@@ -704,6 +934,8 @@ def _run_local(manifest: RunManifest, run_dir: Path, adapter) -> int:
             _stop_process(sampler_proc)
 
     _stop_process(execsnoop_proc)
+    _stop_process_group(api_observer_proc, timeout=2)
+    _write_api_usage_summary(run_dir, events_log)
 
     _write_event(events_log, "run_end", {
         "exit_code": exit_code,

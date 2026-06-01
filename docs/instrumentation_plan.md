@@ -51,6 +51,8 @@ runs/<run_id>/
   proc_timeseries.parquet
   summary.json
   agent_context.json
+  api_requests.jsonl
+  api_usage.json
   docker_run.json
   docker_image.json
   codebase/
@@ -71,6 +73,13 @@ Current strengths:
 - `structured_events_observed.jsonl` timestamps structured stdout/stderr JSONL
   as it arrives, preserving the original stdout/stderr logs while adding
   observer wall-clock and monotonic timestamps.
+- `api_requests.jsonl` records redacted model API request/response metadata
+  when the API observer proxy can be inserted between the agent and provider.
+  It stores sizes, hashes, model names, tool schema names, route/status/timing,
+  and byte counts, not raw prompts, API keys, or response bodies.
+- `api_usage.json` summarizes the proxy log into request counts, observed
+  network wait, model/status/provider counts, tool names, and prompt-like
+  character counts.
 - Docker runs record image/run metadata so container environment changes can be
   separated from agent behavior changes.
 
@@ -116,6 +125,8 @@ Known references:
 - Claude Code: use the version-indexed
   `Piebald-AI/claude-code-system-prompts` inventory to map installed Claude
   Code versions to known system prompt/tool/subagent prompt fragments.
+- See `docs/system_prompt_investigation_20260531.md` for the first Claude/Codex
+  prompt attribution pass and the current causal hypotheses.
 - Pi: use it as a deliberately lightweight contrast agent; fewer tools/prompts
   should make action triggers easier to inspect.
 - DeepSeek-TUI: candidate Rust-based contrast agent for a smaller runtime and
@@ -128,10 +139,22 @@ Observer layer now implemented:
   use JSONL events.
 - timestamp each structured stdout/stderr JSONL event at capture time in
   `structured_events_observed.jsonl`
+- optionally start a redacting local API observer proxy and rewrite supported
+  provider base URLs to it. Claude is covered when `ANTHROPIC_BASE_URL` is
+  configured; Codex is covered when the run uses a configured
+  `CODEX_PROVIDER_BASE_URL` or `OPENAI_BASE_URL`.
 - parse assistant/tool events immediately before each tool span
 - join "assistant/tool event happened at T" to the next subprocess span
 - produce `decision_trace.jsonl` and `decision_trace_summary.json` with
   observed trigger counts
+
+API observer controls:
+
+- enabled by default when a supported upstream base URL is present
+- disable with `HARNESS_API_OBSERVER=0`
+- override the upstream with `HARNESS_API_OBSERVER_UPSTREAM=<url>`
+- raw redacted log: `api_requests.jsonl`
+- summarized log: `api_usage.json`
 
 Validated smoke:
 
@@ -141,6 +164,9 @@ Validated smoke:
   at observer offset 4.301s.
 - The decision trace linked that tool_use to the resulting `bash`/`cat`
   subprocess spans, with 3 observed triggers out of 9 non-bootstrap spans.
+- Local proxy smoke verified that prompt text and auth headers are not written
+  to `api_requests.jsonl`, while model, instruction/message sizes and hashes,
+  tool names, status, byte counts, and timing are preserved.
 
 Next observer upgrade:
 

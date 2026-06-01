@@ -31,7 +31,7 @@ CLAUDE_CODE_MODEL = "deepseek-v4-pro[1m]"
 
 class ClaudeCodeAdapter(AgentAdapter):
     name = "claude_code"
-    version = "2.1.152-deepseek-v4"
+    version = "2.1.156-deepseek-v4"
     capabilities = AgentCapabilities(
         headless=True,
         pin_model=True,

@@ -95,7 +95,7 @@ agent-harness-bench/
 │   ├── base.py                 # AgentAdapter ABC + TaskSpec, InvocationResult, AgentCapabilities
 │   ├── claude_code.py          # claude -p <prompt> --model deepseek-v4-pro[1m] --output-format stream-json
 │   ├── codex.py                # codex exec -m gpt-5.5 --json <prompt> (VERIFIED)
-│   ├── pi.py                   # pi run --non-interactive (NOT YET VERIFIED)
+│   ├── pi.py                   # pi-with-deepseek wrapper, direct DeepSeek provider (VERIFIED)
 │   └── opencode.py             # opencode run --yes (NOT YET VERIFIED)
 │
 ├── measure/
@@ -116,7 +116,7 @@ agent-harness-bench/
 │   ├── base.Dockerfile         # Ubuntu 24.04 + bpftrace + bcc + shims + Python harness
 │   ├── claude_code.Dockerfile  # npm install @anthropic-ai/claude-code
 │   ├── codex.Dockerfile        # npm install @openai/codex
-│   ├── pi.Dockerfile           # npm install @earendil-works/pi-coding-agent (headless flags TBD)
+│   ├── pi.Dockerfile           # npm install @earendil-works/pi-coding-agent + DeepSeek wrapper
 │   └── opencode.Dockerfile     # npm install opencode-ai (placeholder — verify)
 │
 ├── tasks/
@@ -149,7 +149,7 @@ agent-harness-bench/
 |---|---|---|---|---|
 | **Claude Code** | VERIFIED | `claude -p <prompt>` | `--model deepseek-v4-pro[1m]` | Yes — run on this machine |
 | **Codex** | VERIFIED | `codex exec <prompt>` | `-m gpt-5.5` | Yes — run on this machine |
-| **Pi** | NOT VERIFIED | `pi run --non-interactive` | `--model gemini-2.5-pro` | No — CLI existence unknown |
+| **Pi** | VERIFIED | `pi --print --mode json` via `pi-with-deepseek` | `--model deepseek/deepseek-v4-pro` | Yes — full Redis/Linux matrix |
 | **OpenCode** | NOT VERIFIED | `opencode run --yes` | `--model ...` | No — CLI existence unknown |
 
 ### Claude Code adapter details (verified)
@@ -188,11 +188,20 @@ agent-harness-bench/
 - Interactive model switching: `/model` slash command
 - Not available: temperature (must set in config, not CLI flag), max-turns
 
-### Pi adapter (placeholder — needs verification)
-- Assumed CLI: `pi run --non-interactive`
-- Public package: `@earendil-works/pi-coding-agent`
-- Installed in Docker with Node 22.19.0 because the package requires modern Node.
-- Still needs a smoke test for exact non-interactive/headless flags before it enters the matrix.
+### Pi adapter details (verified)
+- Package: `@earendil-works/pi-coding-agent`
+- Docker image: `agent-harness/pi:latest`
+- Wrapper: `docker/pi_with_deepseek.sh`, exposed as `pi-with-deepseek`
+- Headless invocation: `pi --print --mode json --no-session`
+- Model pinning: `--model deepseek/deepseek-v4-pro --thinking high`
+- Provider config: wrapper writes `${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/models.json`
+  at launch using `DEEPSEEK_API_KEY`, `PI_DEEPSEEK_BASE_URL`, and `PI_DEEPSEEK_MODEL`.
+- The wrapper sets provider compat `supportsDeveloperRole=false`; without it, DeepSeek
+  rejected Pi's first request with `messages[0].role: unknown variant developer`.
+- Run mode disables optional context surfaces: `--no-extensions --no-skills
+  --no-prompt-templates --no-themes`
+- Tool surface is intentionally small: `read,bash,edit,write,grep,find,ls`
+- Verified run family: `20260601T153943_pi_*`, 7/7 Redis/Linux cells succeeded.
 
 ### Causal context / observer instrumentation
 - Every local inner run writes `agent_context.json` before launching the agent.
@@ -200,20 +209,29 @@ agent-harness-bench/
   instruction files, and available skill/plugin/agent/command inventories.
 - The file reports available context, not proven model-loaded context. Actual loads require
   structured event logs or a prompt observer.
-- Claude Code now emits `stream-json`; Codex now emits JSONL events. The next parser should
-  build `decision_trace.jsonl` by joining assistant text immediately before each tool call to
-  `tool_spans.jsonl`.
+- Claude Code now emits `stream-json`; Codex and Pi now emit JSONL events.
+- `decision_trace.jsonl` joins timestamped structured agent events to the next subprocess/tool
+  span where possible.
+- Pi emits JSON `tool_execution_start` records; the analyzer parses those as exact
+  first-class Pi tool calls.
+- The API observer proxy is available in Docker/local runs. It rewrites supported provider base
+  URLs to a local redacting proxy and writes `api_requests.jsonl` plus `api_usage.json`.
+- API observer coverage: Claude when `ANTHROPIC_BASE_URL` is set; Codex when a configured
+  `CODEX_PROVIDER_BASE_URL` or `OPENAI_BASE_URL` is present; Pi when `PI_DEEPSEEK_BASE_URL`
+  is set. Disable with `HARNESS_API_OBSERVER=0`; override upstream with
+  `HARNESS_API_OBSERVER_UPSTREAM=<url>`.
 - For Claude Code system-prompt attribution, map `claude --version` to the versioned prompt
   inventory in `Piebald-AI/claude-code-system-prompts`.
 
-### Docker image validation (May 29, 2026)
-- Built `agent-harness/base:latest`, `agent-harness/claude_code:latest`,
+### Docker image validation (May 31, 2026)
+- Rebuilt `agent-harness/base:latest`, `agent-harness/claude_code:latest`,
   `agent-harness/codex:latest`, `agent-harness/pi:latest`, and
   `agent-harness/opencode:latest` on the VM.
+- Claude and Codex Dockerfiles are now pinned instead of installing floating `latest` packages.
 - Smoke-checked versions inside containers:
   - Claude Code: `2.1.156`
   - Codex CLI: `0.135.0`
-  - Pi: `0.77.0`
+  - Pi: `0.78.0` in the latest DeepSeek image
 - `harness_config_redis_linux.json` is set to Docker mode with `parallel_jobs=1`
   for robust sequential measurement.
 
@@ -349,7 +367,8 @@ runs/<run_id>/
   strace_exec.log          # rootless exact execve trace when HARNESS_STRACE_EXEC is enabled
   exit_log.jsonl           # ts, pid, exit_code, ru_maxrss, ru_utime, ru_stime
   events.jsonl             # semantic markers (ablation toggles, phase boundaries)
-  api_usage.json           # tokens in/out/cached, call count, network-wait seconds
+  api_requests.jsonl       # redacted API request/response metadata from observer proxy
+  api_usage.json           # API call count, prompt-like sizes, tool schemas, network wait
   summary.json             # derived: peak tree PSS, per-category breakdown, files_grepped, success
   tool_events.jsonl        # normalized tool events from shims/transcripts/proc fallback
   orchestrator.log         # matrix child log for parallel dispatch
@@ -373,9 +392,8 @@ runs/<run_id>/
 ## Next steps (prioritized)
 
 ### Immediate — day 1 validation gate
-1. **Verify Pi CLI**: Does `pi` have a headless mode? If not, CTO conversation.
-2. **Verify OpenCode CLI**: Does `opencode` have a headless mode? What's the npm package name?
-3. **End-to-end smoke test**: Run one adapter through the full pipeline:
+1. **Verify OpenCode CLI**: Does `opencode` have a headless mode? What's the npm package name?
+2. **End-to-end smoke test for each new adapter**: Run one adapter through the full pipeline:
    ```
    python -m orchestrator.run runs/<test_run>/manifest.json
    ```
@@ -383,17 +401,17 @@ runs/<run_id>/
    produced correctly.
 
 ### Week 1 — measurement layer end-to-end
-4. **Test proc_sampler against a real agent run**: Run `claude -p "find all Python files"` and
+3. **Test proc_sampler against a real agent run**: Run `claude -p "find all Python files"` and
    verify the sampled PSS tree matches `htop`/`docker stats` within a sane margin.
-5. **Test PATH shims**: Set up the shim dir, run an agent, verify exec_log.jsonl shows
+4. **Test PATH shims**: Set up the shim dir, run an agent, verify exec_log.jsonl shows
    tool invocations with correct (tool, argv, pid, timing).
-6. **Test execsnoop**: Run bpftrace alongside, verify it catches at least one spawn
+5. **Test execsnoop**: Run bpftrace alongside, verify it catches at least one spawn
    the shims missed (e.g., an absolute-path call).
-7. **Derive files_grepped**: On a small Q&A task, hand-count files grepped, verify the
+6. **Derive files_grepped**: On a small Q&A task, hand-count files grepped, verify the
    derived count from exec/shim logs matches.
 
 ### Week 2 — robustness + all agents + all modalities
-8. **All four adapters live**: Get Pi and OpenCode adapters verified and running.
+8. **All four adapters live**: Get OpenCode verified; Pi is now verified for the DeepSeek path.
 9. **Empty-task baselines**: Run each agent with a no-op prompt, chart the
    runtime/language overhead (Claude Code/TS vs Python agents).
 10. **Three modalities on ≥2 codebases**: Fill out remaining task definitions.

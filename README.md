@@ -24,6 +24,8 @@ runs/<run_id>/
   tool_events.jsonl
   decision_trace.jsonl
   decision_trace_summary.json
+  api_requests.jsonl
+  api_usage.json
   proc_timeseries.csv
   proc_timeseries.parquet
   summary.json
@@ -46,8 +48,11 @@ Resource attribution is process-tree based. The runner starts the agent, records
 - Agent context: `agent_context.json` records the command, non-secret model/provider env,
   project instruction files, and available skill/plugin/agent inventories that may influence
   tool use. The artifact explicitly separates available context from actually observed loads.
-- Structured agent streams: future Claude Code runs emit `stream-json`; future Codex runs emit
+- Structured agent streams: Claude Code runs emit `stream-json`; Codex runs emit
   JSONL events so we can join assistant decisions to the next subprocess/tool span.
+- API observer proxy: when a supported provider base URL is available, the runner writes
+  redacted `api_requests.jsonl` and summarized `api_usage.json` with request counts, timing,
+  model names, prompt-like sizes/hashes, and tool schema names.
 - Docker metadata: Docker runs write `docker_run.json` and `docker_image.json` so container
   image identity is tied to the run.
 

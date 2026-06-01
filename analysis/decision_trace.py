@@ -64,9 +64,12 @@ def _walk_strings(value: Any, parent_key: str = "") -> list[str]:
 def _event_kind(record: dict[str, Any]) -> str:
     message = record.get("message")
     if isinstance(message, dict):
+        role = str(message.get("role") or "").lower()
         for content in message.get("content") or []:
-            if isinstance(content, dict) and content.get("type") == "tool_use":
+            if isinstance(content, dict) and content.get("type") in {"tool_use", "toolCall"}:
                 return "tool"
+        if role == "assistant":
+            return "assistant"
 
     label = " ".join(
         str(record.get(key, ""))

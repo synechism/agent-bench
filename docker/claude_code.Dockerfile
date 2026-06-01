@@ -3,7 +3,7 @@ FROM agent-harness/base:latest
 
 # Install Claude Code CLI (Node.js)
 # Use the published npm package or local source checkout
-ARG CLAUDE_VERSION=latest
+ARG CLAUDE_VERSION=2.1.156
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION}
 
 # Claude Code needs a home directory for config

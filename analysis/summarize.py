@@ -156,6 +156,28 @@ def _parse_structured_tool_invocations(run_dir: Path) -> list[dict]:
             except json.JSONDecodeError:
                 continue
 
+            if rec.get("type") == "tool_execution_start":
+                tool_name = str(rec.get("toolName") or "unknown")
+                tool_args = rec.get("args") if isinstance(rec.get("args"), dict) else {}
+                command = (
+                    tool_args.get("command")
+                    or tool_args.get("path")
+                    or tool_args.get("pattern")
+                    or tool_args.get("file_path")
+                    or json.dumps(tool_args, sort_keys=True)
+                )
+                events.append(
+                    {
+                        "source": "pi_stream_tool",
+                        "tool": tool_name,
+                        "argv": str(command),
+                        "raw": rec,
+                        "stream": stream_name,
+                        "line_index": idx,
+                    }
+                )
+                continue
+
             message = rec.get("message")
             if isinstance(message, dict):
                 for content in message.get("content") or []:
@@ -554,6 +576,7 @@ def summarize_run(run_dir: Path) -> dict:
         "claude_stream_tool",
         "claude_internal_tool",
         "claude_shell_command",
+        "pi_stream_tool",
     }
     exact_subprocess_sources = {"shim", "execsnoop", "strace_execve"}
     exact_invocations = 0

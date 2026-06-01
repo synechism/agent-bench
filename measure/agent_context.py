@@ -64,6 +64,10 @@ def _safe_env(env: dict[str, str]) -> dict[str, str]:
             "CLAUDE_CODE_EFFORT_LEVEL",
             "OPENAI_BASE_URL",
             "CODEX_HOME",
+            "PI_CODING_AGENT_DIR",
+            "PI_DEEPSEEK_BASE_URL",
+            "PI_DEEPSEEK_MODEL",
+            "PI_TELEMETRY",
             "HOME",
             "NO_COLOR",
         }:
@@ -256,6 +260,41 @@ def _codex_context(home: Path, workdir: Path, env: dict[str, str]) -> dict[str, 
     }
 
 
+def _pi_context(home: Path, workdir: Path, env: dict[str, str]) -> dict[str, Any]:
+    pi_home = Path(env.get("PI_CODING_AGENT_DIR", str(home / ".pi" / "agent"))).expanduser()
+    inventories = {
+        "config_files": [
+            _file_summary(path, pi_home)
+            for path in [
+                pi_home / "models.json",
+                pi_home / "settings.json",
+            ]
+            if path.exists()
+        ],
+        "extensions": _component_inventory(pi_home / "extensions", pi_home, "extensions"),
+        "skills": _component_inventory(pi_home / "skills", pi_home, "skills"),
+        "prompt_templates": _component_inventory(pi_home / "prompt-templates", pi_home, "prompt_templates"),
+        "themes": _component_inventory(pi_home / "themes", pi_home, "themes"),
+        "project_pi": _inventory_dir(workdir / ".pi", workdir),
+    }
+    counts = _loaded_counts(inventories)
+    return {
+        "versions": [_run_version("pi")],
+        "load_observability": {
+            "available_context_recorded": True,
+            "actual_model_context_observed": False,
+            "note": (
+                "This records available Pi config, extensions, skills, prompt templates, "
+                "and themes. The benchmark adapter runs with extensions/skills/templates/"
+                "themes disabled to keep Pi as the lightweight contrast agent."
+            ),
+        },
+        "inventories": inventories,
+        "available_counts": counts,
+        "loaded_counts": counts,
+    }
+
+
 def _generic_context(agent: str, home: Path, workdir: Path) -> dict[str, Any]:
     dot_home = home / f".{agent}"
     dot_project = workdir / f".{agent}"
@@ -313,6 +352,8 @@ def collect_agent_context(
         context.update(_claude_context(home, workdir))
     elif agent == "codex":
         context.update(_codex_context(home, workdir, env))
+    elif agent == "pi":
+        context.update(_pi_context(home, workdir, env))
     else:
         context.update(_generic_context(agent, home, workdir))
 

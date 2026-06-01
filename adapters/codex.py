@@ -14,6 +14,9 @@ Verified flags (from `codex exec --help`, May 2026):
 Supports Azure via ~/.codex/config.toml [model_providers.azure] section.
 Supports /model slash command to switch models interactively.
 Wire API: "responses" (configured in config.toml).
+DeepSeek V4 can be enabled for experiment runs with
+CODEX_DEEPSEEK_MOONBRIDGE=1. The Docker image wrapper starts Moon Bridge,
+generates a per-run Codex config, and leaves the user's host Codex config alone.
 
 Not available (recorded as caveat): temperature, max-turns.
 """
@@ -26,11 +29,12 @@ from adapters.base import AgentAdapter, AgentCapabilities, TaskSpec
 
 
 DEFAULT_CODEX_MODEL = "gpt-5.5"
+MOONBRIDGE_MODEL = "moonbridge"
 
 
 class CodexAdapter(AgentAdapter):
     name = "codex"
-    version = "0.1.0"
+    version = "0.135.0"
     capabilities = AgentCapabilities(
         headless=True,
         pin_model=True,
@@ -46,16 +50,24 @@ class CodexAdapter(AgentAdapter):
             "OPENAI_API_KEY": "${OPENAI_API_KEY}",
             "AZURE_API_KEY": "${AZURE_API_KEY}",     # for Azure users
             "ANTHROPIC_AUTH_TOKEN": "${ANTHROPIC_AUTH_TOKEN}",  # for custom provider probes
+            "DEEPSEEK_API_KEY": "${DEEPSEEK_API_KEY}",
             "CODEX_MODEL": "${CODEX_MODEL}",
             "CODEX_MODEL_PROVIDER": "${CODEX_MODEL_PROVIDER}",
             "CODEX_PROVIDER_BASE_URL": "${CODEX_PROVIDER_BASE_URL}",
             "CODEX_PROVIDER_ENV_KEY": "${CODEX_PROVIDER_ENV_KEY}",
             "CODEX_PROVIDER_WIRE_API": "${CODEX_PROVIDER_WIRE_API}",
+            "CODEX_DEEPSEEK_MOONBRIDGE": "${CODEX_DEEPSEEK_MOONBRIDGE}",
+            "CODEX_MOONBRIDGE_ADDR": "${CODEX_MOONBRIDGE_ADDR}",
+            "MOONBRIDGE_DEEPSEEK_MODEL": "${MOONBRIDGE_DEEPSEEK_MODEL}",
             "NO_COLOR": "1",
         }
 
+    def _use_moonbridge(self) -> bool:
+        return os.environ.get("CODEX_DEEPSEEK_MOONBRIDGE", "").lower() in {"1", "true", "yes"}
+
     def pin_flags(self) -> list[str]:
-        flags = ["-m", os.environ.get("CODEX_MODEL", DEFAULT_CODEX_MODEL)]
+        default_model = MOONBRIDGE_MODEL if self._use_moonbridge() else DEFAULT_CODEX_MODEL
+        flags = ["-m", os.environ.get("CODEX_MODEL", default_model)]
         provider = os.environ.get("CODEX_MODEL_PROVIDER")
         if provider:
             flags.extend(["-c", f'model_provider="{provider}"'])
@@ -71,8 +83,9 @@ class CodexAdapter(AgentAdapter):
         return flags
 
     def build_command(self, task: TaskSpec) -> list[str]:
+        binary = "codex-with-moonbridge" if self._use_moonbridge() else "codex"
         return [
-            "codex", "exec",
+            binary, "exec",
             *self.pin_flags(),
             "--dangerously-bypass-approvals-and-sandbox",
             "--skip-git-repo-check",

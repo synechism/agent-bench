@@ -1,8 +1,8 @@
 """Pi adapter.
 
-Pi is a lightweight coding-agent toolkit. The Docker image installs the public
-`@earendil-works/pi-coding-agent` package; the exact non-interactive flags still
-need a smoke test before Pi enters the main matrix.
+Pi is a lightweight terminal coding harness. For DeepSeek experiment runs, the
+Docker image uses a small wrapper that writes a per-run Pi ``models.json`` and
+then invokes the public ``@earendil-works/pi-coding-agent`` CLI.
 """
 
 from __future__ import annotations
@@ -12,11 +12,11 @@ from adapters.base import AgentAdapter, AgentCapabilities, TaskSpec
 
 class PiAdapter(AgentAdapter):
     name = "pi"
-    version = "0.1.0"
+    version = "0.78.0-deepseek-v4"
     capabilities = AgentCapabilities(
-        headless=True,  # day-1 validation gate — verify
+        headless=True,
         pin_model=True,
-        pin_temperature=True,
+        pin_temperature=False,
         pin_seed=False,
     )
 
@@ -25,23 +25,32 @@ class PiAdapter(AgentAdapter):
 
     def env(self) -> dict[str, str]:
         return {
-            "GOOGLE_API_KEY": "${GOOGLE_API_KEY}",
+            "DEEPSEEK_API_KEY": "${DEEPSEEK_API_KEY}",
+            "PI_DEEPSEEK_BASE_URL": "${PI_DEEPSEEK_BASE_URL}",
+            "PI_DEEPSEEK_MODEL": "${PI_DEEPSEEK_MODEL}",
+            "PI_CODING_AGENT_DIR": "${PI_CODING_AGENT_DIR}",
+            "PI_TELEMETRY": "0",
             "NO_COLOR": "1",
         }
 
     def pin_flags(self) -> list[str]:
         return [
-            "--model", "gemini-2.5-pro",
-            "--temperature", "0.0",
+            "--model", "deepseek/deepseek-v4-pro",
+            "--thinking", "high",
         ]
 
     def build_command(self, task: TaskSpec) -> list[str]:
         return [
-            "pi",
-            "run",
+            "pi-with-deepseek",
             *self.pin_flags(),
-            "--non-interactive",
-            "--max-turns", "50",
+            "--print",
+            "--mode", "json",
+            "--no-session",
+            "--no-extensions",
+            "--no-skills",
+            "--no-prompt-templates",
+            "--no-themes",
+            "--tools", "read,bash,edit,write,grep,find,ls",
             task.prompt,
         ]
 

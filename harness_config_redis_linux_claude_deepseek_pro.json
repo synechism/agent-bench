@@ -1,0 +1,25 @@
+{
+  "agents": ["claude_code"],
+  "codebases": [
+    "empty_baseline",
+    "redis_getex_expire_event_base",
+    "redis_expire_options_base",
+    "linux_v6_6"
+  ],
+  "tasks": [
+    "empty_task",
+    "redis_getex_expired_event",
+    "redis_getex_expired_event_tests",
+    "redis_expire_conditional_options",
+    "linux_proc_thread_self",
+    "linux_string_get_size_tests",
+    "linux_string_get_size_return_length"
+  ],
+  "memory_caps": [null],
+  "repetitions": 1,
+  "sandbox": "docker",
+  "runs_dir": "runs",
+  "timeout_per_run": 1800,
+  "parallel_jobs": 1,
+  "log_api_usage": true
+}

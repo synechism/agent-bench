@@ -1,0 +1,12 @@
+{
+  "agents": ["claude_code"],
+  "codebases": ["redis_getex_expire_event_base"],
+  "tasks": ["redis_getex_expired_event"],
+  "memory_caps": [null],
+  "repetitions": 1,
+  "sandbox": "docker",
+  "runs_dir": "runs",
+  "timeout_per_run": 1800,
+  "parallel_jobs": 1,
+  "log_api_usage": true
+}

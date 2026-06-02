@@ -47,6 +47,11 @@ empty_baseline:
   commit: "builtin-empty-v1"
   language: text
 
+semantic_memory_sentinel:
+  repo_url: builtin:semantic-memory-sentinel-v1
+  commit: "builtin-semantic-memory-sentinel-v1"
+  language: text
+
 # Future additions (week 3+):
 # Full-kernel build/test tasks should be opt-in: they need substantial disk,
 # time, and memory. Prefer focused selftests or compile-only checks by default.

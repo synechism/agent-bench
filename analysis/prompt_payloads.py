@@ -61,7 +61,7 @@ def _request_kind(record: dict[str, Any]) -> tuple[str | None, str | None]:
 
 
 def _prompt_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    input_summary = payload.get("input")
+    input_summary = payload.get("input") if isinstance(payload.get("input"), dict) else payload.get("messages")
     if not isinstance(input_summary, dict):
         return []
     items = input_summary.get("items") or input_summary.get("messages") or []
@@ -72,20 +72,41 @@ def _prompt_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
     for item in items:
         if not isinstance(item, dict):
             continue
-        payload_summary = item.get("payload") or item.get("content")
-        out.append(
-            {
-                "index": item.get("index"),
-                "type": item.get("type"),
-                "role": item.get("role"),
-                "semantic_layer": item.get("semantic_layer"),
-                "name": item.get("name"),
-                "call_id": item.get("call_id"),
-                "status": item.get("status"),
-                "meta": _capture_meta(payload_summary),
-                "capture": _capture(payload_summary),
-            }
-        )
+        blocks = item.get("blocks")
+        if isinstance(blocks, list):
+            for block in blocks:
+                if not isinstance(block, dict):
+                    continue
+                payload_summary = block.get("payload")
+                out.append(
+                    {
+                        "index": item.get("index"),
+                        "block_index": block.get("index"),
+                        "type": block.get("type"),
+                        "role": item.get("role"),
+                        "semantic_layer": block.get("semantic_layer"),
+                        "name": block.get("name"),
+                        "call_id": block.get("id") or block.get("tool_use_id"),
+                        "status": item.get("status"),
+                        "meta": _capture_meta(payload_summary),
+                        "capture": _capture(payload_summary),
+                    }
+                )
+        else:
+            payload_summary = item.get("payload") or item.get("content")
+            out.append(
+                {
+                    "index": item.get("index"),
+                    "type": item.get("type"),
+                    "role": item.get("role"),
+                    "semantic_layer": item.get("semantic_layer"),
+                    "name": item.get("name"),
+                    "call_id": item.get("call_id"),
+                    "status": item.get("status"),
+                    "meta": _capture_meta(payload_summary),
+                    "capture": _capture(payload_summary),
+                }
+            )
     return out
 
 
@@ -103,7 +124,14 @@ def _extract_requests(run_dir: Path) -> list[dict[str, Any]]:
         raw_body = record.get("request_body_capture")
         tools_summary = payload.get("tools") if isinstance(payload.get("tools"), dict) else {}
         tool_schema_summary = tools_summary.get("schema") if isinstance(tools_summary, dict) else None
-        input_summary = payload.get("input") if isinstance(payload.get("input"), dict) else {}
+        instructions_summary = payload.get("instructions") or payload.get("system")
+        input_summary = (
+            payload.get("input")
+            if isinstance(payload.get("input"), dict)
+            else payload.get("messages")
+            if isinstance(payload.get("messages"), dict)
+            else {}
+        )
         requests.append(
             {
                 "request_index": index,
@@ -117,9 +145,10 @@ def _extract_requests(run_dir: Path) -> list[dict[str, Any]]:
                 "body": payload.get("body"),
                 "semantic_layers": payload.get("semantic_layers") or {},
                 "instructions": {
-                    **_capture_meta(payload.get("instructions")),
-                    "capture": _capture(payload.get("instructions")),
+                    **_capture_meta(instructions_summary),
+                    "capture": _capture(instructions_summary),
                 },
+                "instructions_kind": "instructions" if payload.get("instructions") is not None else "system",
                 "tools": {
                     "count": tools_summary.get("count"),
                     "names": tools_summary.get("names") or [],
@@ -182,7 +211,7 @@ def _write_markdown(requests: list[dict[str, Any]], path: Path) -> None:
     lines.append("")
     lines.append(
         "This report is built from sanitized captures in `api_requests.jsonl`. "
-        "It shows the strings Codex sent to the model API, organized by request "
+        "It shows the strings the agent sent to the model API, organized by request "
         "and semantic layer. If a field is marked truncated, increase "
         "`HARNESS_API_OBSERVER_CAPTURE_CHARS` for the next run."
     )
@@ -203,7 +232,7 @@ def _write_markdown(requests: list[dict[str, Any]], path: Path) -> None:
     lines.append("## Static Prompt Blocks")
     lines.append("")
     for block_index, block in enumerate(_unique_blocks(requests, ("instructions",)), start=1):
-        lines.append(f"### Base Instructions {block_index}")
+        lines.append(f"### Instructions/System {block_index}")
         lines.append("")
         lines.append(
             f"- chars: {block.get('chars', 0)}; approx tokens: {block.get('approx_tokens', 0)}; "
@@ -268,7 +297,9 @@ def _write_markdown(requests: list[dict[str, Any]], path: Path) -> None:
         for item in request["input"]["items"]:
             meta = item.get("meta") or {}
             heading = (
-                f"item {item.get('index')} | {item.get('semantic_layer')} | "
+                f"item {item.get('index')}"
+                f"{'.' + str(item.get('block_index')) if item.get('block_index') is not None else ''} | "
+                f"{item.get('semantic_layer')} | "
                 f"type={item.get('type')} role={item.get('role')}"
             )
             if item.get("name"):

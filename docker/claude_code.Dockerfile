@@ -4,7 +4,10 @@ FROM agent-harness/base:latest
 # Install Claude Code CLI (Node.js)
 # Use the published npm package or local source checkout
 ARG CLAUDE_VERSION=2.1.156
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION}
+ARG CLAUDE_TRACE_VERSION=1.0.8
+RUN npm install -g \
+    @anthropic-ai/claude-code@${CLAUDE_VERSION} \
+    @mariozechner/claude-trace@${CLAUDE_TRACE_VERSION}
 
 # Claude Code needs a home directory for config
 ENV HOME=/root
@@ -15,3 +18,4 @@ RUN mkdir -p /root/.claude
 
 # Verify the binary exists
 RUN claude --version || echo "WARNING: claude --version failed"
+RUN claude-trace --help >/dev/null || echo "WARNING: claude-trace --help failed"

@@ -176,11 +176,93 @@ def _message_content_summary(content: Any) -> dict[str, Any]:
     return _summary_with_capture(textish)
 
 
+def _anthropic_block_payload(block: dict[str, Any]) -> Any:
+    block_type = str(block.get("type") or "unknown")
+    if block_type == "text":
+        return block.get("text")
+    if block_type == "tool_use":
+        return {
+            "id": block.get("id"),
+            "name": block.get("name"),
+            "input": block.get("input"),
+        }
+    if block_type == "tool_result":
+        return block.get("content")
+    if block_type in {"thinking", "redacted_thinking"}:
+        return block.get("thinking") or block.get("data") or block.get("text") or block
+    if "content" in block:
+        return _content_text(block.get("content"))
+    if "text" in block:
+        return block.get("text")
+    return block
+
+
+def _anthropic_block_layer(role: str, block_type: str) -> str:
+    if block_type == "tool_result":
+        return "tool_output_memory"
+    if block_type in {"tool_use", "server_tool_use"}:
+        return "tool_call_memory"
+    if block_type in {"thinking", "redacted_thinking", "reasoning"}:
+        return "reasoning_or_compaction_memory"
+    if role == "assistant":
+        return "assistant_memory"
+    if role == "user":
+        return "user_or_task"
+    if role == "system":
+        return "developer_context"
+    return "message_context"
+
+
+def _summarize_anthropic_blocks(role: str, content: Any) -> tuple[list[dict[str, Any]], dict[str, dict[str, int]], dict[str, int]]:
+    if isinstance(content, list):
+        raw_blocks = content
+    else:
+        raw_blocks = [{"type": "text", "text": content}]
+
+    blocks: list[dict[str, Any]] = []
+    by_layer: dict[str, dict[str, int]] = {}
+    by_type: dict[str, int] = {}
+    for block_index, raw_block in enumerate(raw_blocks):
+        if isinstance(raw_block, dict):
+            block_type = str(raw_block.get("type") or "unknown")
+            payload = _anthropic_block_payload(raw_block)
+            summary: dict[str, Any] = {
+                "index": block_index,
+                "type": block_type,
+                "semantic_layer": _anthropic_block_layer(role, block_type),
+                "payload": _summary_with_capture(payload),
+            }
+            for key in ("id", "tool_use_id", "name", "is_error"):
+                if key in raw_block and not isinstance(raw_block[key], (dict, list)):
+                    summary[key] = raw_block[key]
+        else:
+            block_type = "text"
+            summary = {
+                "index": block_index,
+                "type": block_type,
+                "semantic_layer": _anthropic_block_layer(role, block_type),
+                "payload": _summary_with_capture(raw_block),
+            }
+
+        by_type[block_type] = by_type.get(block_type, 0) + 1
+        payload_summary = summary["payload"]
+        layer = str(summary["semantic_layer"])
+        layer_rec = by_layer.setdefault(layer, {"chars": 0, "approx_tokens": 0, "items": 0})
+        layer_rec["chars"] += int(payload_summary.get("chars") or 0)
+        layer_rec["approx_tokens"] += int(payload_summary.get("approx_tokens") or 0)
+        layer_rec["items"] += 1
+        blocks.append(summary)
+
+    return blocks, by_layer, by_type
+
+
 def _summarize_messages(messages: Any) -> dict[str, Any]:
     if not isinstance(messages, list):
         return {"count": 0}
 
     by_role: dict[str, int] = {}
+    by_type: dict[str, int] = {}
+    by_layer: dict[str, dict[str, int]] = {}
     message_summaries: list[dict[str, Any]] = []
     for index, message in enumerate(messages):
         if not isinstance(message, dict):
@@ -188,12 +270,23 @@ def _summarize_messages(messages: Any) -> dict[str, Any]:
             continue
         role = str(message.get("role", "unknown"))
         by_role[role] = by_role.get(role, 0) + 1
-        content = _content_text(message.get("content"))
+        content = message.get("content")
+        blocks, block_layers, block_types = _summarize_anthropic_blocks(role, content)
+        for block_type, count in block_types.items():
+            by_type[block_type] = by_type.get(block_type, 0) + count
+        for layer, rec in block_layers.items():
+            layer_rec = by_layer.setdefault(layer, {"chars": 0, "approx_tokens": 0, "items": 0})
+            layer_rec["chars"] += int(rec.get("chars") or 0)
+            layer_rec["approx_tokens"] += int(rec.get("approx_tokens") or 0)
+            layer_rec["items"] += int(rec.get("items") or 0)
         summary = {
             "index": index,
             "role": role,
-            "content": _summary_with_capture(content),
+            "content": _message_content_summary(content),
+            "blocks": blocks,
         }
+        layers = sorted(block_layers)
+        summary["semantic_layer"] = layers[0] if len(layers) == 1 else "mixed"
         if "type" in message:
             summary["type"] = message.get("type")
         message_summaries.append(summary)
@@ -201,6 +294,8 @@ def _summarize_messages(messages: Any) -> dict[str, Any]:
     return {
         "count": len(messages),
         "by_role": by_role,
+        "by_type": dict(sorted(by_type.items())),
+        "by_semantic_layer": dict(sorted(by_layer.items())),
         "messages": message_summaries,
     }
 
@@ -363,6 +458,10 @@ def _summarize_request_json(data: Any) -> dict[str, Any]:
     input_summary = summary.get("input")
     if isinstance(input_summary, dict):
         for layer, rec in (input_summary.get("by_semantic_layer") or {}).items():
+            add_layer(str(layer), int(rec.get("chars") or 0))
+    messages_summary = summary.get("messages")
+    if isinstance(messages_summary, dict):
+        for layer, rec in (messages_summary.get("by_semantic_layer") or {}).items():
             add_layer(str(layer), int(rec.get("chars") or 0))
     if semantic_layers:
         summary["semantic_layers"] = dict(sorted(semantic_layers.items()))

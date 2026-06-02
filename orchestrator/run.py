@@ -213,6 +213,11 @@ def _prepare_codebase(manifest: RunManifest, run_dir: Path, events_log: Path) ->
         _write_event(events_log, "codebase_builtin_created", {"kind": "empty"})
         return codebase_dir
 
+    if repo_url == "builtin:semantic-memory-sentinel-v1":
+        _create_semantic_memory_sentinel_codebase(codebase_dir)
+        _write_event(events_log, "codebase_builtin_created", {"kind": "semantic_memory_sentinel_v1"})
+        return codebase_dir
+
     _write_event(
         events_log,
         "codebase_checkout_start",
@@ -239,6 +244,180 @@ def _prepare_codebase(manifest: RunManifest, run_dir: Path, events_log: Path) ->
     )
     _write_event(events_log, "codebase_checkout_end", {"path": str(codebase_dir)})
     return codebase_dir
+
+
+def _create_semantic_memory_sentinel_codebase(codebase_dir: Path) -> None:
+    codebase_dir.mkdir(parents=True)
+    (codebase_dir / "sentinels").mkdir()
+    (codebase_dir / "distractors").mkdir()
+    (codebase_dir / "scripts").mkdir()
+
+    facts = {
+        "alpha": "ALPHA-7F3C-ORCHID",
+        "bravo": "BRAVO-18473-HARBOR",
+        "charlie": "CHARLIE-/vortex/quartz",
+        "delta": "DELTA-rotate_checksum_91",
+        "echo": "ECHO-ultramarine-42",
+    }
+    fact_lines = []
+    for name, value in facts.items():
+        (codebase_dir / "sentinels" / f"{name}.txt").write_text(
+            f"# Sentinel {name}\n\n"
+            "This file contains one canonical memory-probe value.\n"
+            f"SENTINEL_{name.upper()}={value}\n"
+            "Do not confuse this value with decoys in distractor files.\n"
+        )
+        fact_lines.append(f"- `{name}` -> `{value}`")
+
+    (codebase_dir / "README.md").write_text(
+        "# Semantic Memory Sentinel Probe\n\n"
+        "This tiny repository is used to study agent semantic-memory consumption.\n"
+        "The `sentinels/` directory contains canonical facts. The `distractors/`\n"
+        "directory and `scripts/emit_noise.py` create irrelevant context pressure.\n\n"
+        "Facts:\n" + "\n".join(fact_lines) + "\n"
+    )
+
+    (codebase_dir / "MEMORY_PROBE.md").write_text(
+        "# Memory Probe Instructions\n\n"
+        "1. Inspect the files in `sentinels/` and identify the five canonical values.\n"
+        "2. Before writing `answers.json`, run `python scripts/emit_noise.py --chunks 8`.\n"
+        "3. After the noise step, fill `answers.json` from memory if possible.\n"
+        "4. Run `python scripts/verify_answers.py`.\n\n"
+        "The point of this repository is not difficulty; it is observability. The\n"
+        "run artifacts let us compare literal visibility, re-reading, and later use.\n"
+    )
+
+    (codebase_dir / "answers.json").write_text(
+        "{\n"
+        "  \"alpha\": \"\",\n"
+        "  \"bravo\": \"\",\n"
+        "  \"charlie\": \"\",\n"
+        "  \"delta\": \"\",\n"
+        "  \"echo\": \"\"\n"
+        "}\n"
+    )
+    (codebase_dir / "expected_answers.json").write_text(
+        json.dumps(facts, indent=2, sort_keys=True) + "\n"
+    )
+
+    emit_noise = '''#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import random
+
+
+DECOYS = [
+    "ALPHA-0000-DECOY",
+    "BRAVO-99999-DECOY",
+    "CHARLIE-/wrong/path",
+    "DELTA-rotate_checksum_00",
+    "ECHO-monochrome-00",
+]
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--chunks", type=int, default=8)
+    parser.add_argument("--lines-per-chunk", type=int, default=80)
+    args = parser.parse_args()
+
+    random.seed(20260602)
+    for chunk in range(args.chunks):
+        print(f"NOISE_CHUNK_BEGIN {chunk:02d}")
+        for line in range(args.lines_per_chunk):
+            decoy = DECOYS[(chunk + line) % len(DECOYS)]
+            salt = random.randrange(10_000_000, 99_999_999)
+            print(
+                f"noise chunk={chunk:02d} line={line:03d} decoy={decoy} "
+                f"payload={salt:x}-{salt * 17:x}-{salt * 31:x}"
+            )
+        print(f"NOISE_CHUNK_END {chunk:02d}")
+
+
+if __name__ == "__main__":
+    main()
+'''
+    verify_answers = '''#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+EXPECTED = {
+    "alpha": "ALPHA-7F3C-ORCHID",
+    "bravo": "BRAVO-18473-HARBOR",
+    "charlie": "CHARLIE-/vortex/quartz",
+    "delta": "DELTA-rotate_checksum_91",
+    "echo": "ECHO-ultramarine-42",
+}
+
+
+def main() -> int:
+    path = Path("answers.json")
+    if not path.exists():
+        print("answers.json missing")
+        return 2
+    try:
+        actual = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        print(f"answers.json invalid JSON: {exc}")
+        return 2
+
+    errors = []
+    for key, expected in EXPECTED.items():
+        if actual.get(key) != expected:
+            errors.append(f"{key}: expected {expected!r}, got {actual.get(key)!r}")
+    if errors:
+        print("SENTINEL_VERIFY_FAIL")
+        for error in errors:
+            print(error)
+        return 1
+    print("SENTINEL_VERIFY_OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+'''
+    (codebase_dir / "scripts" / "emit_noise.py").write_text(emit_noise)
+    (codebase_dir / "scripts" / "verify_answers.py").write_text(verify_answers)
+    (codebase_dir / "scripts" / "emit_noise.py").chmod(0o755)
+    (codebase_dir / "scripts" / "verify_answers.py").chmod(0o755)
+
+    for idx in range(1, 7):
+        lines = [
+            f"# Distractor file {idx}",
+            "These lines contain decoys and repeated irrelevant text.",
+        ]
+        for line_no in range(120):
+            lines.append(
+                f"distractor={idx:02d} line={line_no:03d} "
+                f"decoy=NOT_A_SENTINEL_{idx}_{line_no} "
+                "text=The canonical answer is not on this line."
+            )
+        (codebase_dir / "distractors" / f"noise_{idx:02d}.txt").write_text("\n".join(lines) + "\n")
+
+    subprocess.run(["git", "-C", str(codebase_dir), "init", "--quiet"], check=True)
+    subprocess.run(["git", "-C", str(codebase_dir), "add", "."], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(codebase_dir),
+            "-c",
+            "user.name=Agent Harness",
+            "-c",
+            "user.email=agent-harness@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "Create semantic memory sentinel probe",
+        ],
+        check=True,
+    )
 
 
 def _start_kernel_exec_logger(exec_log: Path, events_log: Path) -> subprocess.Popen | None:
@@ -650,6 +829,10 @@ def _run_docker(manifest: RunManifest, run_dir: Path, adapter) -> int:
         "HARNESS_API_OBSERVER_UPSTREAM",
         "HARNESS_API_OBSERVER_CAPTURE_PROMPTS",
         "HARNESS_API_OBSERVER_CAPTURE_CHARS",
+        "HARNESS_TRACE_EXPORT",
+        "HARNESS_TRACE_HTML",
+        "CLAUDE_TRACE",
+        "CLAUDE_TRACE_LOG_NAME",
     ):
         if key in os.environ:
             cmd.extend(["--env", f"{key}={os.environ[key]}"])

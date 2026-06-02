@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 import re
 import shlex
 from collections import defaultdict
@@ -437,6 +438,145 @@ def _extract_stdout(run_dir: Path) -> str:
     return path.read_text(errors="replace")
 
 
+def _artifact_path(run_dir: Path, path: Path) -> str:
+    try:
+        return str(path.relative_to(run_dir))
+    except ValueError:
+        return str(path)
+
+
+def _trace_jsonl_stats(path: Path) -> dict:
+    valid_pairs = 0
+    response_pairs = 0
+    invalid_lines = 0
+    if path.exists():
+        for line in path.read_text(errors="replace").splitlines():
+            if not line.strip():
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                invalid_lines += 1
+                continue
+            if isinstance(rec, dict) and isinstance(rec.get("request"), dict):
+                valid_pairs += 1
+                if rec.get("response") is not None:
+                    response_pairs += 1
+    return {
+        "valid_pairs": valid_pairs,
+        "response_pairs": response_pairs,
+        "invalid_lines": invalid_lines,
+    }
+
+
+def _api_observer_counts(run_dir: Path) -> dict:
+    counts = {"requests": 0, "responses": 0, "errors": 0}
+    for record in _load_jsonl(run_dir / "api_requests.jsonl"):
+        event = record.get("event")
+        if event == "api_request":
+            counts["requests"] += 1
+        elif event == "api_response":
+            counts["responses"] += 1
+        elif event == "api_error":
+            counts["errors"] += 1
+    return counts
+
+
+def _discover_trace_artifacts(run_dir: Path) -> dict:
+    trace_export_enabled = os.environ.get("HARNESS_TRACE_EXPORT", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    html_generation_enabled = os.environ.get("HARNESS_TRACE_HTML", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    claude_trace_enabled = os.environ.get("CLAUDE_TRACE", "").lower() in {"1", "true", "yes"}
+
+    generated: dict | None = None
+    should_export = trace_export_enabled or html_generation_enabled
+    if should_export and (run_dir / "api_requests.jsonl").exists():
+        try:
+            from analysis.claude_trace_export import write_claude_trace_export
+
+            generated = write_claude_trace_export(run_dir, generate_html=html_generation_enabled)
+        except Exception as exc:
+            generated = {"error": str(exc)}
+
+    artifacts: list[dict] = []
+    trace_dirs = [run_dir / ".claude-trace", run_dir / "codebase" / ".claude-trace"]
+    for trace_dir in trace_dirs:
+        if not trace_dir.exists():
+            continue
+        for path in sorted(trace_dir.glob("*")):
+            if path.suffix not in {".jsonl", ".html"}:
+                continue
+            if path.is_relative_to(run_dir / ".claude-trace"):
+                source = "observer_export"
+            else:
+                source = "claude_trace_live"
+            artifact = {
+                "path": _artifact_path(run_dir, path),
+                "kind": "claude_trace_jsonl" if path.suffix == ".jsonl" else "claude_trace_html",
+                "source": source,
+                "bytes": path.stat().st_size,
+            }
+            if path.suffix == ".jsonl":
+                artifact.update(_trace_jsonl_stats(path))
+            artifacts.append(artifact)
+
+    api_counts = _api_observer_counts(run_dir)
+    warnings: list[str] = []
+    for artifact in artifacts:
+        if artifact.get("kind") == "claude_trace_jsonl" and artifact.get("bytes") == 0:
+            warnings.append(f"{artifact['path']} is empty")
+
+    observer_artifact = next(
+        (
+            artifact
+            for artifact in artifacts
+            if artifact.get("kind") == "claude_trace_jsonl"
+            and artifact.get("source") == "observer_export"
+        ),
+        None,
+    )
+    validation = {
+        "api_request_count": api_counts["requests"],
+        "api_response_count": api_counts["responses"],
+        "api_error_count": api_counts["errors"],
+        "observer_export_pairs": (
+            observer_artifact.get("valid_pairs") if observer_artifact else None
+        ),
+        "observer_export_count_matches_api_requests": (
+            observer_artifact.get("valid_pairs") == api_counts["requests"]
+            if observer_artifact
+            else None
+        ),
+    }
+
+    enabled = (
+        trace_export_enabled
+        or html_generation_enabled
+        or claude_trace_enabled
+        or bool(artifacts)
+    )
+    result = {
+        "enabled": enabled,
+        "claude_trace_live_enabled": claude_trace_enabled,
+        "observer_export_enabled": trace_export_enabled,
+        "html_generation_enabled": html_generation_enabled,
+        "artifacts": artifacts,
+        "validation": validation,
+    }
+    if generated is not None:
+        result["generated"] = generated
+    if warnings:
+        result["warnings"] = warnings
+    return result
+
+
 def _classify_outcome(manifest: dict, events: list[dict], exit_code: int | None, stdout: str) -> dict:
     event_names = {event.get("event") for event in events}
     run_end = next((event for event in reversed(events) if event.get("event") == "run_end"), {})
@@ -643,11 +783,24 @@ def summarize_run(run_dir: Path) -> dict:
     except Exception as exc:
         summary["behavior"] = {"error": str(exc)}
 
+    oracle = ((manifest.get("task") or {}).get("oracle") or {}) if manifest else {}
+    if oracle.get("semantic_memory_probe"):
+        try:
+            from analysis.sentinel_fidelity import write_sentinel_fidelity
+
+            summary["sentinel_fidelity"] = write_sentinel_fidelity(run_dir)
+        except Exception as exc:
+            summary["sentinel_fidelity"] = {"error": str(exc)}
+
     # Load API usage
     api_path = run_dir / "api_usage.json"
     if api_path.exists():
         with open(api_path) as f:
             summary["api_usage"] = json.load(f)
+
+    trace_artifacts = _discover_trace_artifacts(run_dir)
+    if trace_artifacts["enabled"]:
+        summary["trace_artifacts"] = trace_artifacts
 
     agent_context_path = run_dir / "agent_context.json"
     if agent_context_path.exists():

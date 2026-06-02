@@ -1,0 +1,12 @@
+{
+  "agents": ["codex"],
+  "codebases": ["semantic_memory_sentinel"],
+  "tasks": ["semantic_memory_sentinel_pressure_32"],
+  "memory_caps": [null],
+  "repetitions": 1,
+  "sandbox": "local",
+  "runs_dir": "runs",
+  "timeout_per_run": 1200,
+  "parallel_jobs": 1,
+  "log_api_usage": true
+}

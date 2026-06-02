@@ -65,6 +65,8 @@ class ClaudeCodeAdapter(AgentAdapter):
             "CLAUDE_TOOLS": "${CLAUDE_TOOLS}",
             "CLAUDE_BARE": "${CLAUDE_BARE}",
             "CLAUDE_DISABLE_SLASH_COMMANDS": "${CLAUDE_DISABLE_SLASH_COMMANDS}",
+            "CLAUDE_TRACE": "${CLAUDE_TRACE}",
+            "CLAUDE_TRACE_LOG_NAME": "${CLAUDE_TRACE_LOG_NAME}",
             "NO_COLOR": "1",
         }
 
@@ -98,6 +100,17 @@ class ClaudeCodeAdapter(AgentAdapter):
             command.append("--bare")
         if os.environ.get("CLAUDE_DISABLE_SLASH_COMMANDS", "").lower() in {"1", "true", "yes"}:
             command.append("--disable-slash-commands")
+        if os.environ.get("CLAUDE_TRACE", "").lower() in {"1", "true", "yes"}:
+            trace_command = [
+                "claude-trace",
+                "--include-all-requests",
+                "--no-open",
+            ]
+            trace_log_name = os.environ.get("CLAUDE_TRACE_LOG_NAME")
+            if trace_log_name:
+                trace_command.extend(["--log", trace_log_name])
+            trace_command.extend(["--run-with", *command[1:]])
+            return trace_command
         return command
 
     def local_command(self, task: TaskSpec) -> list[str]:

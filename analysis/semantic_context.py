@@ -79,6 +79,25 @@ def _layer_chars(payload: dict[str, Any]) -> dict[str, int]:
             else:
                 layer = "other_input"
             result[layer] = result.get(layer, 0) + chars
+    messages_payload = payload.get("messages")
+    if isinstance(messages_payload, dict):
+        for layer, rec in (messages_payload.get("by_semantic_layer") or {}).items():
+            result[str(layer)] = result.get(str(layer), 0) + int((rec or {}).get("chars") or 0)
+        if not messages_payload.get("by_semantic_layer"):
+            for message in messages_payload.get("messages") or []:
+                if not isinstance(message, dict):
+                    continue
+                chars = int((message.get("content") or {}).get("chars") or 0)
+                role = str(message.get("role") or "unknown")
+                if role == "system":
+                    layer = "developer_context"
+                elif role == "assistant":
+                    layer = "assistant_memory"
+                elif role == "user":
+                    layer = "user_or_task"
+                else:
+                    layer = "message_context"
+                result[layer] = result.get(layer, 0) + chars
     return result
 
 
@@ -98,7 +117,7 @@ def _request_kind(record: dict[str, Any]) -> tuple[str | None, str | None]:
 
 
 def _input_counts(payload: dict[str, Any]) -> dict[str, Any]:
-    input_payload = payload.get("input")
+    input_payload = payload.get("input") if isinstance(payload.get("input"), dict) else payload.get("messages")
     if not isinstance(input_payload, dict):
         return {"input_count": 0, "by_type": {}, "by_role": {}}
     return {
@@ -121,35 +140,70 @@ def _hash_of(payload: dict[str, Any], key: str) -> str | None:
 def _has_captured_text(payload: dict[str, Any]) -> bool:
     if isinstance(payload.get("instructions"), dict) and payload["instructions"].get("capture"):
         return True
+    if isinstance(payload.get("system"), dict) and payload["system"].get("capture"):
+        return True
     input_payload = payload.get("input")
     if isinstance(input_payload, dict):
         for item in input_payload.get("items") or input_payload.get("messages") or []:
             content = item.get("payload") or item.get("content") if isinstance(item, dict) else None
             if isinstance(content, dict) and content.get("capture"):
                 return True
+            if isinstance(item, dict):
+                for block in item.get("blocks") or []:
+                    payload_summary = block.get("payload") if isinstance(block, dict) else None
+                    if isinstance(payload_summary, dict) and payload_summary.get("capture"):
+                        return True
+    messages_payload = payload.get("messages")
+    if isinstance(messages_payload, dict):
+        for message in messages_payload.get("messages") or []:
+            if not isinstance(message, dict):
+                continue
+            if isinstance(message.get("content"), dict) and message["content"].get("capture"):
+                return True
+            for block in message.get("blocks") or []:
+                payload_summary = block.get("payload") if isinstance(block, dict) else None
+                if isinstance(payload_summary, dict) and payload_summary.get("capture"):
+                    return True
     return False
 
 
 def _largest_tool_outputs(payload: dict[str, Any], limit: int = 10) -> list[dict[str, Any]]:
-    input_payload = payload.get("input")
-    if not isinstance(input_payload, dict):
-        return []
-    items = input_payload.get("items")
-    if not isinstance(items, list):
-        return []
-
     calls: dict[str, dict[str, Any]] = {}
     outputs: list[dict[str, Any]] = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        call_id = item.get("call_id")
-        if not call_id:
-            continue
-        if item.get("type") in {"function_call", "custom_tool_call", "local_shell_call"}:
-            calls[str(call_id)] = item
-        elif item.get("type") in {"function_call_output", "custom_tool_call_output"}:
-            outputs.append(item)
+    input_payload = payload.get("input")
+    if isinstance(input_payload, dict) and isinstance(input_payload.get("items"), list):
+        for item in input_payload.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            call_id = item.get("call_id")
+            if not call_id:
+                continue
+            if item.get("type") in {"function_call", "custom_tool_call", "local_shell_call"}:
+                calls[str(call_id)] = item
+            elif item.get("type") in {"function_call_output", "custom_tool_call_output"}:
+                outputs.append(item)
+    messages_payload = payload.get("messages")
+    if isinstance(messages_payload, dict):
+        for message in messages_payload.get("messages") or []:
+            if not isinstance(message, dict):
+                continue
+            for block in message.get("blocks") or []:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_use" and block.get("id"):
+                    calls[str(block.get("id"))] = {
+                        "call_id": block.get("id"),
+                        "name": block.get("name"),
+                        "payload": block.get("payload"),
+                    }
+                elif block.get("type") == "tool_result" and block.get("tool_use_id"):
+                    outputs.append(
+                        {
+                            "call_id": block.get("tool_use_id"),
+                            "type": "tool_result",
+                            "payload": block.get("payload"),
+                        }
+                    )
 
     ranked: list[dict[str, Any]] = []
     for output in outputs:
@@ -212,6 +266,7 @@ def derive_semantic_context(run_dir: Path) -> tuple[list[dict[str, Any]], dict[s
     previous_body_chars: int | None = None
     previous_layer_chars: dict[str, int] | None = None
     instruction_hashes: Counter[str] = Counter()
+    system_hashes: Counter[str] = Counter()
     tool_schema_hashes: Counter[str] = Counter()
     request_kinds: Counter[str] = Counter()
     window_ids: Counter[str] = Counter()
@@ -236,9 +291,12 @@ def derive_semantic_context(run_dir: Path) -> tuple[list[dict[str, Any]], dict[s
         if window_id:
             window_ids[window_id] += 1
         instruction_hash = _hash_of(payload, "instructions")
+        system_hash = _hash_of(payload, "system")
         tool_schema_hash = _hash_of(payload, "tools")
         if instruction_hash:
             instruction_hashes[instruction_hash] += 1
+        if system_hash:
+            system_hashes[system_hash] += 1
         if tool_schema_hash:
             tool_schema_hashes[tool_schema_hash] += 1
 
@@ -278,6 +336,7 @@ def derive_semantic_context(run_dir: Path) -> tuple[list[dict[str, Any]], dict[s
             },
             "input": _input_counts(payload),
             "instructions_hash": instruction_hash,
+            "system_hash": system_hash,
             "tool_schema_hash": tool_schema_hash,
             "capture_present": _has_captured_text(payload),
         }
@@ -291,13 +350,18 @@ def derive_semantic_context(run_dir: Path) -> tuple[list[dict[str, Any]], dict[s
             max_body_payload = payload
 
     unique_instruction_chars = 0
+    unique_system_chars = 0
     unique_tool_schema_chars = 0
     seen_instruction_hashes: set[str] = set()
+    seen_system_hashes: set[str] = set()
     seen_tool_hashes: set[str] = set()
     for record in timeline:
         if record.get("instructions_hash") and record["instructions_hash"] not in seen_instruction_hashes:
             seen_instruction_hashes.add(record["instructions_hash"])
             unique_instruction_chars += int(record["semantic_layer_chars"].get("base_instructions", 0))
+        if record.get("system_hash") and record["system_hash"] not in seen_system_hashes:
+            seen_system_hashes.add(record["system_hash"])
+            unique_system_chars += int(record["semantic_layer_chars"].get("system_instructions", 0))
         if record.get("tool_schema_hash") and record["tool_schema_hash"] not in seen_tool_hashes:
             seen_tool_hashes.add(record["tool_schema_hash"])
             unique_tool_schema_chars += int(record["semantic_layer_chars"].get("tool_schema", 0))
@@ -307,6 +371,9 @@ def derive_semantic_context(run_dir: Path) -> tuple[list[dict[str, Any]], dict[s
     )
     serialized_tool_schema_chars = sum(
         int(record["semantic_layer_chars"].get("tool_schema", 0)) for record in timeline
+    )
+    serialized_system_chars = sum(
+        int(record["semantic_layer_chars"].get("system_instructions", 0)) for record in timeline
     )
     serialized_unclassified_chars = sum(
         int((record.get("memory_vs_static") or {}).get("unclassified_serialization_chars") or 0)
@@ -329,10 +396,14 @@ def derive_semantic_context(run_dir: Path) -> tuple[list[dict[str, Any]], dict[s
         },
         "repeated_static_overhead": {
             "unique_instruction_hashes": len(instruction_hashes),
+            "unique_system_hashes": len(system_hashes),
             "unique_tool_schema_hashes": len(tool_schema_hashes),
             "serialized_instruction_chars": serialized_instruction_chars,
             "unique_instruction_chars": unique_instruction_chars,
             "repeated_instruction_chars": max(0, serialized_instruction_chars - unique_instruction_chars),
+            "serialized_system_chars": serialized_system_chars,
+            "unique_system_chars": unique_system_chars,
+            "repeated_system_chars": max(0, serialized_system_chars - unique_system_chars),
             "serialized_tool_schema_chars": serialized_tool_schema_chars,
             "unique_tool_schema_chars": unique_tool_schema_chars,
             "repeated_tool_schema_chars": max(0, serialized_tool_schema_chars - unique_tool_schema_chars),

@@ -39,6 +39,10 @@ measure = ["shims/*.sh"]
 line-length = 100
 target-version = "py311"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["runs", "codebase", ".git"]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true

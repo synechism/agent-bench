@@ -51,6 +51,7 @@ runs/<run_id>/
   semantic_context_summary.json
   prompt_payloads.jsonl
   prompt_payload_report.md
+  .claude-trace/observer_api_trace.jsonl
   summary.json
 ```
 
@@ -180,7 +181,8 @@ What it captures:
 - request and response byte counts
 - network wait time
 - prompt-like character counts
-- semantic layer sizes for Responses API requests
+- semantic layer sizes for OpenAI Responses API requests and Anthropic-style
+  Claude `messages` requests
 - per-input item type/role/layer counts
 - advertised tool schema names
 - in default mode, hashes and sizes of request bodies, not raw prompt/response
@@ -208,9 +210,12 @@ Important caveats:
   alongside the size/hash summaries.
 - In capture mode, the proxy stores both semantic-field captures and a
   sanitized full request-body capture. This lets us inspect the exact
-  Responses API wrapper Codex sent, not only the extracted prompt strings.
+  API wrapper an agent sent, not only the extracted prompt strings.
 - Codex may appear as `moonbridge` because Codex talks to a local bridge, which
   then routes to DeepSeek.
+- Claude Code uses Anthropic-style payloads. The observer splits top-level
+  `system`, `tools`, `messages`, assistant `tool_use` blocks, user
+  `tool_result` blocks, and thinking blocks into semantic layers.
 - Claude and Pi usually expose the final upstream model name directly.
 
 Manual use:
@@ -356,7 +361,7 @@ Outputs:
 
 - `prompt_payloads.jsonl`: one JSON object per model request with captured base
   instructions, tool schema, raw request body when available, and every input
-  item's captured payload.
+  item/message block's captured payload.
 - `prompt_payload_report.md`: readable markdown report with de-duplicated static
   blocks and per-request input items.
 
@@ -368,6 +373,40 @@ Manual use:
 
 ```bash
 python -m analysis.prompt_payloads runs/<run_id>
+```
+
+### `analysis/claude_trace_export.py`
+
+Converts the harness observer log into Claude Trace's request/response-pair
+JSONL shape.
+
+Inputs:
+
+- `runs/<run_id>/api_requests.jsonl`
+- sanitized full request-body captures when they exist
+
+Outputs:
+
+- `.claude-trace/observer_api_trace.jsonl`
+
+Notes:
+
+- The exporter does not capture any new prompt text. It only reuses sanitized
+  observer captures that already exist in `api_requests.jsonl`.
+- Response bodies are not available from the harness observer today, so the
+  exported response body contains response-size metadata instead of streamed
+  model content.
+- Set `HARNESS_TRACE_EXPORT=1` during `analysis.summarize` or a benchmark run
+  to generate this artifact and add count validation under
+  `summary.json["trace_artifacts"]`.
+- Set `HARNESS_TRACE_HTML=1` as well to ask the installed `claude-trace` CLI to
+  generate `.claude-trace/observer_api_trace.html`.
+
+Manual use:
+
+```bash
+python -m analysis.claude_trace_export runs/<run_id>
+python -m analysis.claude_trace_export runs/<run_id> --html
 ```
 
 ### `analysis/semantic_aggregate.py`
@@ -427,6 +466,7 @@ Outputs:
   - `behavior_metrics.json`
   - `decision_trace.jsonl`
   - `decision_trace_summary.json`
+  - `.claude-trace/observer_api_trace.jsonl` when `HARNESS_TRACE_EXPORT=1`
 
 Key summary fields:
 
@@ -436,6 +476,7 @@ Key summary fields:
 - tool invocation counts
 - files grepped/read
 - API usage
+- trace artifacts and observer/trace count validation when enabled
 - agent context counts
 - outcome classification
 - top behavior/hotspot snippets

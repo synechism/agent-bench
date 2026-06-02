@@ -1,0 +1,27 @@
+{
+  "kind": "qa",
+  "name": "semantic_memory_sentinel_probe",
+  "prompt": "Run the semantic memory sentinel probe in this repository. First read MEMORY_PROBE.md. Inspect the sentinel files and identify the five canonical values. Then run `python scripts/emit_noise.py --chunks 8` before editing `answers.json`. After the noise step, fill `answers.json` with the five values, preferably without re-reading the sentinel files. Run `python scripts/verify_answers.py` and report whether it passed. Do not modify the sentinel files or verifier.",
+  "codebase": "semantic_memory_sentinel",
+  "oracle": {
+    "semantic_memory_probe": true,
+    "expected_answer_file": "answers.json",
+    "expected": {
+      "alpha": "ALPHA-7F3C-ORCHID",
+      "bravo": "BRAVO-18473-HARBOR",
+      "charlie": "CHARLIE-/vortex/quartz",
+      "delta": "DELTA-rotate_checksum_91",
+      "echo": "ECHO-ultramarine-42"
+    },
+    "sentinel_files": [
+      "sentinels/alpha.txt",
+      "sentinels/bravo.txt",
+      "sentinels/charlie.txt",
+      "sentinels/delta.txt",
+      "sentinels/echo.txt"
+    ],
+    "noise_command": "python scripts/emit_noise.py --chunks 8",
+    "verify_command": "python scripts/verify_answers.py",
+    "timeout_s": 600
+  }
+}

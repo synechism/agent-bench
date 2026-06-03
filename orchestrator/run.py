@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import os
 import re
@@ -249,6 +250,7 @@ def _prepare_codebase(manifest: RunManifest, run_dir: Path, events_log: Path) ->
 def _create_semantic_memory_sentinel_codebase(codebase_dir: Path) -> None:
     codebase_dir.mkdir(parents=True)
     (codebase_dir / "sentinels").mkdir()
+    (codebase_dir / "many_facts").mkdir()
     (codebase_dir / "distractors").mkdir()
     (codebase_dir / "scripts").mkdir()
 
@@ -386,6 +388,136 @@ if __name__ == "__main__":
     (codebase_dir / "scripts" / "verify_answers.py").write_text(verify_answers)
     (codebase_dir / "scripts" / "emit_noise.py").chmod(0o755)
     (codebase_dir / "scripts" / "verify_answers.py").chmod(0o755)
+
+    many_facts = {
+        "fact_01": "MF01-ION-7301",
+        "fact_02": "MF02-QUARTZ-9146",
+        "fact_03": "MF03-VECTOR-2085",
+        "fact_04": "MF04-EMBER-6519",
+        "fact_05": "MF05-CIPHER-4820",
+        "fact_06": "MF06-HARBOR-3394",
+        "fact_07": "MF07-MATRIX-7712",
+        "fact_08": "MF08-NOVA-1268",
+        "fact_09": "MF09-ORBIT-5903",
+        "fact_10": "MF10-PULSE-4471",
+        "fact_11": "MF11-QUANTA-8826",
+        "fact_12": "MF12-RIFT-3057",
+        "fact_13": "MF13-SIGNAL-6744",
+        "fact_14": "MF14-TENSOR-2199",
+        "fact_15": "MF15-UMBRA-7630",
+        "fact_16": "MF16-VELVET-4182",
+        "fact_17": "MF17-WARDEN-9521",
+        "fact_18": "MF18-XENON-6073",
+        "fact_19": "MF19-YONDER-1840",
+        "fact_20": "MF20-ZENITH-5368",
+        "fact_21": "MF21-AXIOM-7254",
+        "fact_22": "MF22-BEACON-3916",
+        "fact_23": "MF23-CASCADE-8402",
+        "fact_24": "MF24-DRIFT-2675",
+    }
+    positions = ("begin", "middle", "end")
+    for index, (key, value) in enumerate(many_facts.items(), start=1):
+        position = positions[(index - 1) % len(positions)]
+        sentinel_line = {"begin": 6, "middle": 45, "end": 82}[position]
+        lines = [
+            f"# Many-file sentinel {key}",
+            f"POSITION={position}",
+            "Only the line beginning MANY_SENTINEL is canonical.",
+        ]
+        for line_no in range(1, 90):
+            if line_no == sentinel_line:
+                lines.append(f"MANY_SENTINEL {key}={value}")
+            else:
+                lines.append(
+                    f"line={line_no:03d} decoy={key}-DECOY-{line_no:03d} "
+                    f"payload={index * 1000 + line_no:06d} canonical=false"
+                )
+        (codebase_dir / "many_facts" / f"{key}_{position}.txt").write_text("\n".join(lines) + "\n")
+
+    (codebase_dir / "many_answers.json").write_text(
+        "{\n"
+        + ",\n".join(f'  "{key}": ""' for key in many_facts)
+        + "\n}\n"
+    )
+
+    many_hashes = {key: hashlib.sha256(value.encode()).hexdigest() for key, value in many_facts.items()}
+    verify_many = f'''#!/usr/bin/env python3
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+
+EXPECTED_HASHES = {json.dumps(many_hashes, indent=4, sort_keys=True)}
+
+
+def main() -> int:
+    path = Path("many_answers.json")
+    if not path.exists():
+        print("many_answers.json missing")
+        return 2
+    try:
+        actual = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        print(f"many_answers.json invalid JSON: {{exc}}")
+        return 2
+
+    errors = []
+    for key, expected_hash in EXPECTED_HASHES.items():
+        value = actual.get(key)
+        if not isinstance(value, str):
+            errors.append(f"{{key}}: missing or non-string")
+            continue
+        digest = hashlib.sha256(value.encode()).hexdigest()
+        if digest != expected_hash:
+            errors.append(f"{{key}}: hash mismatch for value {{value!r}}")
+    extra = sorted(set(actual) - set(EXPECTED_HASHES))
+    if extra:
+        errors.append(f"unexpected keys: {{extra}}")
+    if errors:
+        print("MANY_SENTINEL_VERIFY_FAIL")
+        for error in errors:
+            print(error)
+        return 1
+    print("MANY_SENTINEL_VERIFY_OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+'''
+    emit_many_distractors = '''#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--rounds", type=int, default=24)
+    parser.add_argument("--lines-per-round", type=int, default=50)
+    args = parser.parse_args()
+
+    for round_index in range(args.rounds):
+        print(f"MANY_DISTRACTOR_ROUND_BEGIN {round_index:02d}")
+        for line in range(args.lines_per_round):
+            print(
+                f"distractor round={round_index:02d} line={line:03d} "
+                f"decoy=MF{(line % 24) + 1:02d}-NOT-CANONICAL-{round_index:02d}-{line:03d} "
+                f"payload={round_index * 100000 + line:08d}"
+            )
+        print(f"MANY_DISTRACTOR_ROUND_END {round_index:02d}")
+
+
+if __name__ == "__main__":
+    main()
+'''
+    (codebase_dir / "scripts" / "verify_many_answers.py").write_text(verify_many)
+    (codebase_dir / "scripts" / "emit_many_distractors.py").write_text(emit_many_distractors)
+    (codebase_dir / "scripts" / "verify_many_answers.py").chmod(0o755)
+    (codebase_dir / "scripts" / "emit_many_distractors.py").chmod(0o755)
 
     for idx in range(1, 7):
         lines = [

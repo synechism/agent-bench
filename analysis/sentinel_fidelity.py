@@ -140,7 +140,11 @@ def _fact_visibility(prompt_payloads: list[dict[str, Any]], expected: dict[str, 
     return visibility
 
 
-def _event_probe(events: list[dict[str, Any]], expected: dict[str, str]) -> dict[str, Any]:
+def _event_probe(
+    events: list[dict[str, Any]],
+    expected: dict[str, str],
+    sentinel_files: list[str],
+) -> dict[str, Any]:
     completed = _completed_events(events)
     first_noise_ts: datetime | None = None
     first_verify_ts: datetime | None = None
@@ -161,7 +165,8 @@ def _event_probe(events: list[dict[str, Any]], expected: dict[str, str]) -> dict
         if "SENTINEL_VERIFY_OK" in text:
             verify_ok = True
         is_command = item_type == "command_execution"
-        if is_command and ("sentinels/" in cmd or any(value in text for value in expected.values())):
+        mentions_sentinel_file = any(path in cmd for path in sentinel_files)
+        if is_command and (mentions_sentinel_file or any(value in text for value in expected.values())):
             read_events.append(
                 {
                     "ts": event.get("observer_ts"),
@@ -221,7 +226,12 @@ def score_sentinel_fidelity(run_dir: Path) -> dict[str, Any]:
     prompt_payloads = _load_jsonl(run_dir / "prompt_payloads.jsonl")
     events = _load_jsonl(run_dir / "structured_events_observed.jsonl")
     visibility = _fact_visibility(prompt_payloads, expected)
-    event_probe = _event_probe(events, expected)
+    sentinel_files = [
+        str(path)
+        for path in oracle.get("sentinel_files", [])
+        if isinstance(path, str)
+    ]
+    event_probe = _event_probe(events, expected, sentinel_files)
 
     summary = {
         "run_id": run_dir.name,

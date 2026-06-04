@@ -1,0 +1,12 @@
+{
+  "agents": ["claude_code"],
+  "codebases": ["semantic_memory_sentinel"],
+  "tasks": ["semantic_memory_sentinel_distance_60"],
+  "memory_caps": [null],
+  "repetitions": 1,
+  "sandbox": "docker",
+  "runs_dir": "runs",
+  "timeout_per_run": 2400,
+  "parallel_jobs": 1,
+  "log_api_usage": true
+}

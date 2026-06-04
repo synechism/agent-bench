@@ -222,17 +222,14 @@ text{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,
 <circle cx='541.62' cy='818.00' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 110: 0 at 8.92 min</title></circle>
 <circle cx='545.72' cy='818.00' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 111: 0 at 9.00 min</title></circle>
 <circle cx='547.97' cy='818.00' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 112: 0 at 9.05 min</title></circle>
-<path d='M 110.00 818.00 L 110.07 818.00 L 117.12 818.00 L 121.71 818.00 L 126.80 818.00 L 130.99 818.00 L 131.54 818.00 L 137.16 818.00 L 138.23 818.00 L 143.21 818.00 L 143.60 818.00 L 148.44 818.00 L 150.75 818.00 L 153.78 818.00 L 157.90 818.00 L 167.26 818.00 L 194.51 818.00 L 200.52 818.00 L 258.71 818.00 L 268.85 818.00 L 277.67 818.00 L 283.47 818.00 L 288.08 818.00 L 293.40 818.00 L 296.09 818.00 L 298.98 818.00 L 302.69 818.00 L 307.29 818.00' class='line' stroke='#d97706'/>
+<path d='M 110.00 818.00 L 110.07 818.00 L 117.12 818.00 L 121.71 818.00 L 126.80 818.00 L 131.54 818.00 L 138.23 818.00 L 143.60 818.00 L 148.44 818.00 L 150.75 818.00 L 153.78 818.00 L 157.90 818.00 L 167.26 818.00 L 194.51 818.00 L 200.52 818.00 L 258.71 818.00 L 268.85 818.00 L 277.67 818.00 L 283.47 818.00 L 288.08 818.00 L 293.40 818.00 L 296.09 818.00 L 298.98 818.00 L 302.69 818.00 L 307.29 818.00' class='line' stroke='#d97706'/>
 <circle cx='110.00' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 1: 0 at 0.00 min</title></circle>
 <circle cx='110.07' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 2: 0 at 0.00 min</title></circle>
 <circle cx='117.12' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 3: 0 at 0.15 min</title></circle>
 <circle cx='121.71' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 4: 0 at 0.24 min</title></circle>
 <circle cx='126.80' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 5: 0 at 0.35 min</title></circle>
-<circle cx='130.99' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 6: 0 at 0.43 min</title></circle>
 <circle cx='131.54' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 7: 0 at 0.44 min</title></circle>
-<circle cx='137.16' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 8: 0 at 0.56 min</title></circle>
 <circle cx='138.23' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 9: 0 at 0.58 min</title></circle>
-<circle cx='143.21' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 10: 0 at 0.69 min</title></circle>
 <circle cx='143.60' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 11: 0 at 0.69 min</title></circle>
 <circle cx='148.44' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 12: 0 at 0.79 min</title></circle>
 <circle cx='150.75' cy='818.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 13: 0 at 0.84 min</title></circle>
@@ -326,14 +323,13 @@ text{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,
 <circle cx='880.44' cy='818.00' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 55: 0 at 5.80 min</title></circle>
 <circle cx='882.80' cy='818.00' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 56: 0 at 5.90 min</title></circle>
 <circle cx='884.06' cy='818.00' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 57: 0 at 5.95 min</title></circle>
-<path d='M 740.00 818.00 L 740.03 818.00 L 742.64 818.00 L 743.67 818.00 L 746.15 818.00 L 748.37 818.00 L 750.04 818.00 L 750.23 818.00 L 752.44 818.00 L 754.04 818.00 L 755.78 818.00 L 757.31 818.00 L 759.26 818.00 L 761.18 818.00 L 762.68 818.00 L 763.93 818.00 L 773.48 818.00 L 775.64 818.00 L 775.91 818.00 L 778.74 818.00 L 781.45 818.00 L 815.47 818.00 L 818.77 818.00 L 822.48 818.00 L 824.50 818.00 L 844.61 818.00 L 864.22 818.00 L 866.02 818.00 L 867.85 818.00 L 869.22 818.00 L 871.03 818.00 L 873.31 818.00 L 878.92 818.00 L 880.30 818.00 L 883.83 818.00 L 896.51 818.00 L 911.00 818.00 L 913.66 818.00 L 915.25 818.00 L 916.71 818.00 L 918.20 818.00 L 920.53 818.00 L 924.79 818.00 L 936.72 818.00 L 938.93 818.00 L 941.54 818.00 L 945.07 818.00 L 947.97 818.00 L 951.57 818.00 L 954.32 818.00 L 955.80 818.00 L 956.94 818.00 L 971.57 818.00 L 976.57 818.00 L 978.15 818.00 L 980.48 818.00 L 982.04 818.00 L 983.67 818.00 L 985.89 818.00 L 988.46 818.00 L 991.80 818.00 L 995.81 818.00 L 996.96 818.00' class='line' stroke='#d97706'/>
+<path d='M 740.00 818.00 L 740.03 818.00 L 742.64 818.00 L 743.67 818.00 L 746.15 818.00 L 748.37 818.00 L 750.23 818.00 L 752.44 818.00 L 754.04 818.00 L 755.78 818.00 L 757.31 818.00 L 759.26 818.00 L 761.18 818.00 L 762.68 818.00 L 763.93 818.00 L 773.48 818.00 L 775.91 818.00 L 778.74 818.00 L 781.45 818.00 L 815.47 818.00 L 818.77 818.00 L 822.48 818.00 L 824.50 818.00 L 844.61 818.00 L 864.22 818.00 L 866.02 818.00 L 867.85 818.00 L 869.22 818.00 L 871.03 818.00 L 873.31 818.00 L 878.92 818.00 L 880.30 818.00 L 883.83 818.00 L 896.51 818.00 L 911.00 818.00 L 913.66 818.00 L 915.25 818.00 L 916.71 818.00 L 918.20 818.00 L 920.53 818.00 L 924.79 818.00 L 936.72 818.00 L 938.93 818.00 L 941.54 818.00 L 945.07 818.00 L 947.97 818.00 L 951.57 818.00 L 954.32 818.00 L 955.80 818.00 L 956.94 818.00 L 971.57 818.00 L 976.57 818.00 L 978.15 818.00 L 980.48 818.00 L 982.04 818.00 L 983.67 818.00 L 985.89 818.00 L 988.46 818.00 L 991.80 818.00 L 995.81 818.00 L 996.96 818.00' class='line' stroke='#d97706'/>
 <circle cx='740.00' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 1: 0 at 0.00 min</title></circle>
 <circle cx='740.03' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 2: 0 at 0.00 min</title></circle>
 <circle cx='742.64' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 3: 0 at 0.11 min</title></circle>
 <circle cx='743.67' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 4: 0 at 0.15 min</title></circle>
 <circle cx='746.15' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 5: 0 at 0.25 min</title></circle>
 <circle cx='748.37' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 6: 0 at 0.35 min</title></circle>
-<circle cx='750.04' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 7: 0 at 0.41 min</title></circle>
 <circle cx='750.23' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 8: 0 at 0.42 min</title></circle>
 <circle cx='752.44' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 9: 0 at 0.51 min</title></circle>
 <circle cx='754.04' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 10: 0 at 0.58 min</title></circle>
@@ -344,7 +340,6 @@ text{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,
 <circle cx='762.68' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 15: 0 at 0.94 min</title></circle>
 <circle cx='763.93' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 16: 0 at 0.99 min</title></circle>
 <circle cx='773.48' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 17: 0 at 1.38 min</title></circle>
-<circle cx='775.64' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 18: 0 at 1.47 min</title></circle>
 <circle cx='775.91' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 19: 0 at 1.48 min</title></circle>
 <circle cx='778.74' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 20: 0 at 1.60 min</title></circle>
 <circle cx='781.45' cy='818.00' r='2.2' fill='#d97706' class='dot'><title>Claude Code, request 21: 0 at 1.71 min</title></circle>

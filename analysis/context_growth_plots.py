@@ -20,6 +20,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "docs" / "semantic_memory" / "context_growth_plots_20260604"
+EXACT_TOKEN_PATH = OUT_DIR / "exact_context_tokens.jsonl"
 
 
 @dataclass(frozen=True)
@@ -104,8 +105,8 @@ AGENT_COLORS = {
 METRICS = {
     "context_tokens": {
         "title": "Context Window Size",
-        "subtitle": "semantic approx tokens",
-        "y_label": "approx tokens",
+        "subtitle": "exact provider input tokens",
+        "y_label": "input tokens",
         "file": "context_window_tokens.svg",
     },
     "active_tools": {
@@ -138,6 +139,21 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
             continue
         rows.append(json.loads(line))
     return rows
+
+
+def _load_exact_tokens() -> dict[tuple[str, int], int]:
+    exact: dict[tuple[str, int], int] = {}
+    if not EXACT_TOKEN_PATH.exists():
+        return exact
+    for line in EXACT_TOKEN_PATH.read_text(errors="replace").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if row.get("exact_input_tokens"):
+            exact[(str(row["run_id"]), int(row["request_index"]))] = int(
+                row["exact_input_tokens"]
+            )
+    return exact
 
 
 def _parse_ts(value: str) -> datetime:
@@ -207,18 +223,25 @@ def _context_tokens(record: dict[str, Any]) -> int:
 
 def collect_rows() -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
+    exact_tokens = _load_exact_tokens()
     for spec in RUNS:
         records = _load_jsonl(spec.run_dir / "prompt_payloads.jsonl")
         if not records:
             continue
         start = _parse_ts(str(records[0]["ts"]))
         for record in records:
+            if "count_tokens" in str(record.get("path") or ""):
+                continue
             ts = _parse_ts(str(record["ts"]))
             layer_tokens = {
                 key: int(value.get("approx_tokens") or 0)
                 for key, value in (record.get("semantic_layers") or {}).items()
                 if isinstance(value, dict)
             }
+            semantic_approx_tokens = _context_tokens(record)
+            exact_input_tokens = exact_tokens.get(
+                (spec.run_dir.name, int(record.get("request_index") or 0))
+            )
             output.append(
                 {
                     "agent": spec.agent,
@@ -229,7 +252,14 @@ def collect_rows() -> list[dict[str, Any]]:
                     "timestamp": record.get("ts"),
                     "elapsed_seconds": (ts - start).total_seconds(),
                     "elapsed_minutes": (ts - start).total_seconds() / 60,
-                    "context_tokens": _context_tokens(record),
+                    "context_tokens": exact_input_tokens
+                    if exact_input_tokens is not None
+                    else semantic_approx_tokens,
+                    "semantic_approx_tokens": semantic_approx_tokens,
+                    "exact_input_tokens": exact_input_tokens or "",
+                    "context_tokens_source": "exact_provider_count"
+                    if exact_input_tokens is not None
+                    else "semantic_approx_chars_div_4",
                     "active_tools": int((record.get("tools") or {}).get("count") or 0),
                     "skill_headers_loaded": _skill_headers_loaded(record),
                     "active_skills": _active_skills(record),
@@ -308,6 +338,9 @@ def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
         "elapsed_seconds",
         "elapsed_minutes",
         "context_tokens",
+        "semantic_approx_tokens",
+        "exact_input_tokens",
+        "context_tokens_source",
         "active_tools",
         "skill_headers_loaded",
         "active_skills",
@@ -475,21 +508,58 @@ def _summary_table(rows: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _drop_table(rows: list[dict[str, Any]]) -> list[str]:
+    lines = [
+        "| task | agent | request transition | from tokens | to tokens | drop | interpretation |",
+        "| --- | --- | ---: | ---: | ---: | ---: | --- |",
+    ]
+    for task_key in TASK_ORDER:
+        for agent in AGENT_COLORS:
+            series = sorted(
+                [r for r in rows if r["task_key"] == task_key and r["agent"] == agent],
+                key=lambda r: int(r["request_index"]),
+            )
+            for prev, curr in zip(series, series[1:]):
+                before = int(prev["context_tokens"])
+                after = int(curr["context_tokens"])
+                if after >= before:
+                    continue
+                if agent == "Claude Code" and int(curr["active_tools"]) == 17:
+                    reason = "Main-agent prompt handed work to a reduced 17-tool Explore subagent."
+                elif agent == "Claude Code" and int(curr["active_tools"]) == 27:
+                    reason = "Explore subagent returned; parent retained the Agent result summary, not the full subagent transcript."
+                else:
+                    reason = "Active request context changed; inspect payload layers for details."
+                lines.append(
+                    f"| {curr['task_label']} | {agent} | {int(prev['request_index'])} -> {int(curr['request_index'])} | "
+                    f"{before:,} | {after:,} | {before - after:,} | {reason} |"
+                )
+    if len(lines) == 2:
+        lines.append("| none | none | - | - | - | - | No downward transitions in plotted generation requests. |")
+    return lines
+
+
 def write_report(rows: list[dict[str, Any]], path: Path) -> None:
+    exact_rows = sum(1 for row in rows if row.get("context_tokens_source") == "exact_provider_count")
     lines = [
         "# Codex vs. Claude Code Context Growth Plots - 2026-06-04",
         "",
         "This report plots the matched representative task runs at the level of model API requests. "
         "Each point is one request captured in `prompt_payloads.jsonl`; the x-axis is elapsed "
-        "wall-clock time from the first captured request in that run.",
+        "wall-clock time from the first captured request in that run. Provider `count_tokens` "
+        "probe requests are excluded from the main plots because they are tokenizer checks, not "
+        "generation/model-context turns.",
         "",
         "## Definitions",
         "",
-        "- `context_tokens`: sum of `semantic_layers[*].approx_tokens` for the request. "
-        "This is a semantic approximation of context-window occupancy, not a provider billing counter.",
+        "- `context_tokens`: exact provider `input_tokens` from the Anthropic-compatible "
+        "`count_tokens` endpoint when present. Codex requests are first replayed through Moonbridge "
+        "to count the converted Anthropic/DeepSeek request. If an exact count is missing, the CSV "
+        "marks the row as a semantic chars/4 fallback.",
         "- `active_tools`: count of top-level tools advertised to the model on that request.",
         "- `skill_headers_loaded`: count of skill names visible in the developer/skills inventory text.",
         "- `active_skills`: count of visible `Skill` tool invocations in the request context.",
+        f"- Exact coverage: {exact_rows}/{len(rows)} plotted generation requests have provider-counted input tokens.",
         "",
         "## Plots",
         "",
@@ -505,6 +575,32 @@ def write_report(rows: list[dict[str, Any]], path: Path) -> None:
         "",
         *_summary_table(rows),
         "",
+        "## Why The Context Line Drops",
+        "",
+        "The context window is measured per model request, not as a single global "
+        "memory pool across every Claude Code worker. In these runs, the downward "
+        "steps are Claude Code parent/subagent boundaries. The parent starts with "
+        "the full 27-tool surface, delegates exploration to a reduced 17-tool "
+        "Explore subagent whose own transcript grows, then receives a compact "
+        "`Agent` tool result summary. The parent does not ingest the subagent's "
+        "entire tool transcript.",
+        "",
+        "Mechanically, each model API call is a fresh request body. The model does "
+        "not automatically keep the previous request's full prompt unless the "
+        "agent sends that content again. So a subagent can spend many tokens while "
+        "it is active, then the next parent request can be smaller because Claude "
+        "Code resends only the parent transcript plus the subagent's summarized "
+        "`Agent` result. This is a context-window drop, not a refund or erasure of "
+        "tokens already spent.",
+        "",
+        "For billing and total work accounting, the subagent requests should still "
+        "be counted. For active-context accounting, the drop is real because the "
+        "parent request no longer contains the subagent's full working history. "
+        "These are different measurements: active context window versus cumulative "
+        "token consumption.",
+        "",
+        *_drop_table(rows),
+        "",
         "## Interpretation Notes",
         "",
         "- Claude Code has an initial title/metadata-style request with no tools before the main agent request. "
@@ -513,12 +609,14 @@ def write_report(rows: list[dict[str, Any]], path: Path) -> None:
         "a 27-tool main-agent surface and a 17-tool reduced surface in the more complex runs.",
         "- Skill headers are available-context, not actual skill activation. In these matched runs, the skill inventory "
         "is loaded, but actual skill activation remains zero.",
-        "- The CSV next to this report includes layer-level token columns and `body_approx_tokens` "
-        "so the semantic total can be audited against raw request-body size.",
+        "- The CSV next to this report includes `semantic_approx_tokens`, layer-level approximate "
+        "token columns, and `body_approx_tokens` so the exact total can be audited against the older "
+        "semantic estimate and raw request-body size.",
         "",
         "## Data",
         "",
         "- Raw time series: `context_growth_timeseries.csv`",
+        "- Exact token backfill: `exact_context_tokens.jsonl`",
     ]
     path.write_text("\n".join(lines) + "\n")
 

@@ -144,6 +144,7 @@ def _event_probe(
     events: list[dict[str, Any]],
     expected: dict[str, str],
     sentinel_files: list[str],
+    noise_command: str | None,
 ) -> dict[str, Any]:
     completed = _completed_events(events)
     first_noise_ts: datetime | None = None
@@ -158,7 +159,11 @@ def _event_probe(
         item = _event_item(event)
         item_type = str(item.get("type") or "")
         ts = _parse_ts(event.get("observer_ts"))
-        if "emit_noise.py" in cmd and first_noise_ts is None:
+        noise_markers = ["emit_noise.py", "emit_many_distractors.py", "distance_noise/"]
+        if noise_command:
+            noise_markers.append(noise_command)
+            noise_markers.extend(part for part in noise_command.split() if "/" in part or part.endswith(".py"))
+        if any(marker and marker in cmd for marker in noise_markers) and first_noise_ts is None:
             first_noise_ts = ts
         if "verify_answers.py" in cmd and first_verify_ts is None:
             first_verify_ts = ts
@@ -231,7 +236,8 @@ def score_sentinel_fidelity(run_dir: Path) -> dict[str, Any]:
         for path in oracle.get("sentinel_files", [])
         if isinstance(path, str)
     ]
-    event_probe = _event_probe(events, expected, sentinel_files)
+    noise_command = oracle.get("noise_command") if isinstance(oracle.get("noise_command"), str) else None
+    event_probe = _event_probe(events, expected, sentinel_files, noise_command)
 
     summary = {
         "run_id": run_dir.name,

@@ -253,6 +253,50 @@ This run added two new observations:
 The many-file run is stronger than the earlier sentinel runs because facts were
 spread across 24 files and 31 API requests.
 
+## 8. Distance Probe: Long-Range Retention
+
+The next probe separated fact collection from fact use with a long unrelated
+tool-output phase:
+
+```text
+runs/20260603T173458_codex_semantic_memory_sentinel_semantic_memory_sentinel_distance_60_nocap_rep0
+```
+
+It used the same 24 facts as the many-file probe, then required 60 separate
+reads from `distance_noise/` before writing the answer file.
+
+Results:
+
+| metric | value |
+| --- | ---: |
+| API requests | 65 |
+| carried-memory items | 151 |
+| carried items retained to final | 151 |
+| max visible carried-memory chars | 613,873 |
+| max request body chars | 666,179 |
+| tool-output memory chars | 570,392 |
+| answers correct | true |
+| all 24 facts visible in final request | true |
+| re-read after distance/noise phase | false |
+| dropped/compacted items observed | false |
+
+Codex collected all 24 facts with one compact command:
+
+```text
+rg "MANY_SENTINEL" many_facts
+```
+
+That fact-bearing output first appeared in request 2 and remained visible
+through request 65. The distance phase then added roughly 9.4k chars of retained
+tool output per noise file for most of the run. The final request body reached
+666,179 chars, with 613,873 chars of visible carried memory, and every carried
+item was still present.
+
+This is our strongest Codex retention result so far. It does not prove there is
+no compaction boundary. It pushes the observed lower bound for append-only
+carried transcript behavior to 65 requests, 151 carried items, and roughly
+614k visible carried-memory chars.
+
 ## Current Interpretation
 
 Our current Codex model is:
@@ -274,6 +318,9 @@ Our current Codex model is:
     through distractor output.
 11. Codex can reduce semantic pressure by choosing narrower retrieval commands,
     not only by relying on tool-output truncation.
+12. Long-distance retention works at least through the observed distance-60
+    boundary: 65 requests, 151 carried items, and 613,873 chars of visible
+    carried memory.
 
 The most accurate short version:
 
@@ -286,14 +333,15 @@ those items remain visible, are summarized, are dropped, or are re-derived.
 
 ## What We Still Do Not Know
 
-We have not yet found the compaction boundary. We still need to identify:
+We have not yet found the compaction boundary. The observed append-only range
+now extends through the distance-60 run, but we still need to identify:
 
 - when call IDs disappear from later requests,
 - whether disappeared items are replaced by summaries,
 - whether those summaries are model-authored or client-authored,
 - whether facts beyond output truncation boundaries are recoverable,
-- whether many medium-sized outputs stress memory differently from one huge
-  output,
+- whether many medium-sized outputs eventually stress memory differently from
+  one huge output,
 - whether retained facts are ignored or corrupted under heavier distraction.
 
 The next best experiment is not simply bigger output. It should vary output
@@ -304,6 +352,9 @@ shape:
 - decoys sharing prefixes with real facts,
 - delayed use-after-distance checks,
 - repeated turns until either item dropping or summary replacement appears.
+
+At this point, the key next unknown is the first request where the transcript
+stops behaving append-only.
 
 ## Artifact Index
 
@@ -319,6 +370,9 @@ shape:
 - `codex_sentinel_probe_20260602.md`: first sentinel/fidelity probe.
 - `codex_sentinel_pressure32_20260602.md`: pressure-ramp follow-up.
 - `codex_sentinel_many_files_20260603.md`: many-file output-shape probe.
+- `codex_sentinel_distance60_20260603.md`: long-distance retention probe.
+- `codex_cto_semantic_memory_answers_20260604.md`: consolidated Codex answers
+  to the CTO semantic-memory question set.
 - `claude_code_semantic_memory_analysis_20260602.md`: Claude Code analysis.
 - `claude_representative_aggregate_20260602.md`: Claude Code aggregate.
 - `claude_representative_aggregate_20260602.json`: machine-readable Claude

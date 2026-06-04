@@ -1,0 +1,262 @@
+[
+  {
+    "description": "Runs a command in a PTY, returning output or a session ID for ongoing interaction.",
+    "name": "exec_command",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "cmd": {
+          "description": "Shell command to execute.",
+          "type": "string"
+        },
+        "justification": {
+          "description": "Only set if sandbox_permissions is \\\"require_escalated\\\".\n                    Request approval from the user to run this command outside the sandbox.\n                    Phrased as a simple question that summarizes the purpose of the\n                    command as it relates to the task at hand - e.g. 'Do you want to\n                    fetch and pull the latest version of this git branch?'",
+          "type": "string"
+        },
+        "login": {
+          "description": "Whether to run the shell with -l/-i semantics. Defaults to true.",
+          "type": "boolean"
+        },
+        "max_output_tokens": {
+          "description": "Maximum number of tokens to return. Excess output will be truncated.",
+          "type": "number"
+        },
+        "prefix_rule": {
+          "description": "Only specify when sandbox_permissions is `require_escalated`.\n                        Suggest a prefix command pattern that will allow you to fulfill similar requests from the user in the future.\n                        Should be a short but reasonable prefix, e.g. [\\\"git\\\", \\\"pull\\\"] or [\\\"uv\\\", \\\"run\\\"] or [\\\"pytest\\\"].",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sandbox_permissions": {
+          "description": "Sandbox permissions for the command. Set to \"require_escalated\" to request running without sandbox restrictions; defaults to \"use_default\".",
+          "type": "string"
+        },
+        "shell": {
+          "description": "Shell binary to launch. Defaults to the user's default shell.",
+          "type": "string"
+        },
+        "tty": {
+          "description": "Whether to allocate a TTY for the command. Defaults to false (plain pipes); set to true to open a PTY and access TTY process.",
+          "type": "boolean"
+        },
+        "workdir": {
+          "description": "Optional working directory to run the command in; defaults to the turn cwd.",
+          "type": "string"
+        },
+        "yield_time_ms": {
+          "description": "How long to wait (in milliseconds) for output before yielding.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "cmd"
+      ],
+      "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+  },
+  {
+    "description": "Writes characters to an existing unified exec session and returns recent output.",
+    "name": "write_stdin",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "chars": {
+          "description": "Bytes to write to stdin (may be empty to poll).",
+          "type": "string"
+        },
+        "max_output_tokens": {
+          "description": "Maximum number of tokens to return. Excess output will be truncated.",
+          "type": "number"
+        },
+        "session_id": {
+          "description": "Identifier of the running unified exec session.",
+          "type": "number"
+        },
+        "yield_time_ms": {
+          "description": "How long to wait (in milliseconds) for output before yielding.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+  },
+  {
+    "description": "Updates the task plan.\nProvide an optional explanation and a list of plan items, each with a step and status.\nAt most one step can be in_progress at a time.\n",
+    "name": "update_plan",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "explanation": {
+          "type": "string"
+        },
+        "plan": {
+          "description": "The list of steps",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "status": {
+                "description": "One of: pending, in_progress, completed",
+                "type": "string"
+              },
+              "step": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "step",
+              "status"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "plan"
+      ],
+      "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+  },
+  {
+    "description": "Request user input for one to three short questions and wait for the response. This tool is only available in Plan mode.",
+    "name": "request_user_input",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "questions": {
+          "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "header": {
+                "description": "Short header label shown in the UI (12 or fewer chars).",
+                "type": "string"
+              },
+              "id": {
+                "description": "Stable identifier for mapping answers (snake_case).",
+                "type": "string"
+              },
+              "options": {
+                "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option in this list; the client will add a free-form \"Other\" option automatically.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "One short sentence explaining impact/tradeoff if selected.",
+                      "type": "string"
+                    },
+                    "label": {
+                      "description": "User-facing label (1-5 words).",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "description"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "question": {
+                "description": "Single-sentence prompt shown to the user.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "header",
+              "question",
+              "options"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "questions"
+      ],
+      "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+  },
+  {
+    "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+    "format": {
+      "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\n\nhunk: add_hunk | delete_hunk | update_hunk\nadd_hunk: \"*** Add File: \" filename LF add_line+\ndelete_hunk: \"*** Delete File: \" filename LF\nupdate_hunk: \"*** Update File: \" filename LF change_move? change?\n\nfilename: /(.+)/\nadd_line: \"+\" /(.*)/ LF -> line\n\nchange_move: \"*** Move to: \" filename LF\nchange: (change_context | change_line)+ eof_line?\nchange_context: (\"@@\" | \"@@ \" /(.+)/) LF\nchange_line: (\"+\" | \"-\" | \" \") /(.*)/ LF\neof_line: \"*** End of File\" LF\n\n%import common.LF\n",
+      "syntax": "lark",
+      "type": "grammar"
+    },
+    "name": "apply_patch",
+    "type": "custom"
+  },
+  {
+    "description": "View a local image from the filesystem (only use if given a full filepath by the user, and the image isn't already attached to the thread context within <image ...> tags).",
+    "name": "view_image",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "description": "Optional detail override. Supported values are `high` and `original`; omit this field for default high resized behavior. Use `original` to preserve the file's original resolution instead of resizing to fit. This is important when high-fidelity image perception or precise localization is needed, especially for CUA agents.",
+          "enum": [
+            "high",
+            "original"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "description": "Local filesystem path to an image file",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "strict": false,
+    "type": "function"
+  },
+  {
+    "description": "# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\n\nYou have access to tools from the following sources:\n- Multi-agent tools: Spawn and manage sub-agents.\nSome of the tools may not have been provided to you upfront, and you should use this tool (`tool_search`) to search for the required tools. For MCP tool discovery, always use `tool_search` instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
+    "execution": "client",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "description": "Maximum number of tools to return (defaults to 8).",
+          "type": "number"
+        },
+        "query": {
+          "description": "Search query for deferred tools.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "type": "tool_search"
+  },
+  {
+    "external_web_access": true,
+    "search_content_types": [
+      "text",
+      "image"
+    ],
+    "type": "web_search"
+  }
+]

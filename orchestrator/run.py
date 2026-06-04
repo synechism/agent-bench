@@ -251,6 +251,7 @@ def _create_semantic_memory_sentinel_codebase(codebase_dir: Path) -> None:
     codebase_dir.mkdir(parents=True)
     (codebase_dir / "sentinels").mkdir()
     (codebase_dir / "many_facts").mkdir()
+    (codebase_dir / "distance_noise").mkdir()
     (codebase_dir / "distractors").mkdir()
     (codebase_dir / "scripts").mkdir()
 
@@ -518,6 +519,19 @@ if __name__ == "__main__":
     (codebase_dir / "scripts" / "emit_many_distractors.py").write_text(emit_many_distractors)
     (codebase_dir / "scripts" / "verify_many_answers.py").chmod(0o755)
     (codebase_dir / "scripts" / "emit_many_distractors.py").chmod(0o755)
+
+    for idx in range(1, 81):
+        lines = [
+            f"# Distance noise file {idx:02d}",
+            "This file is intentionally irrelevant to the sentinel facts.",
+        ]
+        for line_no in range(120):
+            lines.append(
+                f"distance_noise={idx:02d} line={line_no:03d} "
+                f"decoy=MF{((idx + line_no) % 24) + 1:02d}-DISTANCE-DECOY-{idx:02d}-{line_no:03d} "
+                f"payload={idx * 100000 + line_no:08d}"
+            )
+        (codebase_dir / "distance_noise" / f"noise_{idx:02d}.txt").write_text("\n".join(lines) + "\n")
 
     for idx in range(1, 7):
         lines = [

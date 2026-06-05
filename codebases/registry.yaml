@@ -52,6 +52,16 @@ semantic_memory_sentinel:
   commit: "builtin-semantic-memory-sentinel-v1"
   language: text
 
+frontend_figma_app:
+  repo_url: builtin:frontend-figma-app-v1
+  commit: "builtin-frontend-figma-app-v1"
+  language: typescript
+
+frontend_plugin_app:
+  repo_url: builtin:frontend-figma-app-v1
+  commit: "builtin-frontend-plugin-app-v1"
+  language: typescript
+
 # Future additions (week 3+):
 # Full-kernel build/test tasks should be opt-in: they need substantial disk,
 # time, and memory. Prefer focused selftests or compile-only checks by default.

@@ -1,0 +1,12 @@
+{
+  "agents": ["codex", "claude_code"],
+  "codebases": ["frontend_plugin_app"],
+  "tasks": ["frontend_plugin_design_to_playwright_app"],
+  "memory_caps": [null],
+  "repetitions": 1,
+  "sandbox": "docker",
+  "runs_dir": "runs",
+  "timeout_per_run": 4200,
+  "parallel_jobs": 1,
+  "log_api_usage": true
+}

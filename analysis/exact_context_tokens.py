@@ -29,8 +29,13 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "docs" / "semantic_memory" / "context_growth_plots_20260604"
-OUT_PATH = OUT_DIR / "exact_context_tokens.jsonl"
+SCENARIO_OUT_DIRS = {
+    "redis": ROOT / "docs" / "semantic_memory" / "context_growth_plots_20260604",
+    "frontend_plugin": ROOT
+    / "docs"
+    / "semantic_memory"
+    / "context_growth_plots_frontend_plugin_20260605",
+}
 
 
 @dataclass(frozen=True)
@@ -39,7 +44,7 @@ class RunSpec:
     run_dir: Path
 
 
-RUNS = [
+REDIS_RUNS = [
     RunSpec(
         "Codex",
         ROOT / "runs" / "20260601T202331_codex_empty_baseline_empty_task_nocap_rep0",
@@ -85,6 +90,26 @@ RUNS = [
         / "20260602T131620_claude_code_redis_expire_options_base_redis_expire_conditional_options_nocap_rep0",
     ),
 ]
+
+FRONTEND_PLUGIN_RUNS = [
+    RunSpec(
+        "Codex",
+        ROOT
+        / "runs"
+        / "20260605T142450_codex_frontend_plugin_app_frontend_plugin_design_to_playwright_app_nocap_rep0",
+    ),
+    RunSpec(
+        "Claude Code",
+        ROOT
+        / "runs"
+        / "20260605T143603_claude_code_frontend_plugin_app_frontend_plugin_design_to_playwright_app_nocap_rep0",
+    ),
+]
+
+SCENARIO_RUNS = {
+    "redis": REDIS_RUNS,
+    "frontend_plugin": FRONTEND_PLUGIN_RUNS,
+}
 
 
 class CaptureState:
@@ -436,14 +461,16 @@ def _write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
             f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
-def backfill(limit: int | None = None) -> list[dict[str, Any]]:
-    rows_by_key = _existing(OUT_PATH)
+def backfill(
+    run_specs: list[RunSpec], out_path: Path, limit: int | None = None
+) -> list[dict[str, Any]]:
+    rows_by_key = _existing(out_path)
     work_done = 0
 
     def save_progress() -> None:
-        _write_rows(OUT_PATH, list(rows_by_key.values()))
+        _write_rows(out_path, list(rows_by_key.values()))
 
-    for spec in RUNS:
+    for spec in run_specs:
         records = _load_api_requests(spec.run_dir)
         if spec.agent != "Claude Code":
             continue
@@ -471,7 +498,7 @@ def backfill(limit: int | None = None) -> list[dict[str, Any]]:
             if limit and work_done >= limit:
                 return list(rows_by_key.values())
 
-    codex_specs = [spec for spec in RUNS if spec.agent == "Codex"]
+    codex_specs = [spec for spec in run_specs if spec.agent == "Codex"]
     if codex_specs:
         fake_server, fake_port = _start_fake_upstream()
         moonbridge: Moonbridge | None = None
@@ -513,11 +540,18 @@ def backfill(limit: int | None = None) -> list[dict[str, Any]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--scenario",
+        choices=sorted(SCENARIO_RUNS),
+        default="redis",
+        help="Captured run set to count.",
+    )
     parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
-    rows = backfill(limit=args.limit)
-    _write_rows(OUT_PATH, rows)
-    print(f"Wrote {len(rows)} exact token rows to {OUT_PATH}")
+    out_path = SCENARIO_OUT_DIRS[args.scenario] / "exact_context_tokens.jsonl"
+    rows = backfill(SCENARIO_RUNS[args.scenario], out_path, limit=args.limit)
+    _write_rows(out_path, rows)
+    print(f"Wrote {len(rows)} exact token rows to {out_path}")
 
 
 if __name__ == "__main__":

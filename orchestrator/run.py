@@ -219,6 +219,11 @@ def _prepare_codebase(manifest: RunManifest, run_dir: Path, events_log: Path) ->
         _write_event(events_log, "codebase_builtin_created", {"kind": "semantic_memory_sentinel_v1"})
         return codebase_dir
 
+    if repo_url == "builtin:frontend-figma-app-v1":
+        _create_frontend_figma_app_codebase(codebase_dir)
+        _write_event(events_log, "codebase_builtin_created", {"kind": "frontend_figma_app_v1"})
+        return codebase_dir
+
     _write_event(
         events_log,
         "codebase_checkout_start",
@@ -561,6 +566,214 @@ if __name__ == "__main__":
             "--quiet",
             "-m",
             "Create semantic memory sentinel probe",
+        ],
+        check=True,
+    )
+
+
+def _create_frontend_figma_app_codebase(codebase_dir: Path) -> None:
+    codebase_dir.mkdir(parents=True)
+    (codebase_dir / "src").mkdir()
+    (codebase_dir / "tests").mkdir()
+    (codebase_dir / "docs").mkdir()
+
+    (codebase_dir / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "figma-memory-e2e-app",
+                "version": "0.1.0",
+                "private": True,
+                "type": "module",
+                "scripts": {
+                    "dev": "vite --host 127.0.0.1",
+                    "build": "vite build",
+                    "test:e2e": "playwright test",
+                    "test": "npm run build && npm run test:e2e",
+                },
+                "dependencies": {},
+                "devDependencies": {
+                    "@playwright/test": "^1.44.0",
+                    "typescript": "^5.4.5",
+                    "vite": "^5.2.12",
+                },
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    (codebase_dir / "index.html").write_text(
+        "\n".join(
+            [
+                '<!doctype html>',
+                '<html lang="en">',
+                "  <head>",
+                '    <meta charset="UTF-8" />',
+                '    <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
+                "    <title>Figma Memory E2E App</title>",
+                "  </head>",
+                "  <body>",
+                '    <main id="app"></main>',
+                '    <script type="module" src="/src/main.ts"></script>',
+                "  </body>",
+                "</html>",
+            ]
+        )
+        + "\n"
+    )
+    (codebase_dir / "src" / "main.ts").write_text(
+        "\n".join(
+            [
+                "import './styles.css';",
+                "",
+                "const app = document.querySelector<HTMLDivElement>('#app');",
+                "",
+                "if (!app) {",
+                "  throw new Error('Missing #app root');",
+                "}",
+                "",
+                "app.innerHTML = `",
+                '  <section class="shell" aria-labelledby="page-title">',
+                '    <p class="eyebrow">Figma MCP benchmark scaffold</p>',
+                '    <h1 id="page-title">Replace this scaffold with the Figma-derived app.</h1>',
+                '    <p class="summary">The benchmark task should extract design details, implement the interface, and verify it with Playwright.</p>',
+                '    <button type="button">Primary action</button>',
+                "  </section>",
+                "`;",
+                "",
+            ]
+        )
+    )
+    (codebase_dir / "src" / "styles.css").write_text(
+        "\n".join(
+            [
+                ":root {",
+                "  color: #1f2937;",
+                "  background: #f8fafc;",
+                "  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;",
+                "}",
+                "",
+                "* {",
+                "  box-sizing: border-box;",
+                "}",
+                "",
+                "body {",
+                "  margin: 0;",
+                "}",
+                "",
+                ".shell {",
+                "  min-height: 100vh;",
+                "  display: grid;",
+                "  align-content: center;",
+                "  gap: 16px;",
+                "  max-width: 760px;",
+                "  margin: 0 auto;",
+                "  padding: 48px 24px;",
+                "}",
+                "",
+                ".eyebrow {",
+                "  margin: 0;",
+                "  color: #0f766e;",
+                "  font-size: 0.78rem;",
+                "  font-weight: 700;",
+                "  text-transform: uppercase;",
+                "}",
+                "",
+                "h1 {",
+                "  margin: 0;",
+                "  font-size: clamp(2rem, 6vw, 4.5rem);",
+                "  line-height: 1;",
+                "}",
+                "",
+                ".summary {",
+                "  margin: 0;",
+                "  max-width: 56ch;",
+                "  color: #475569;",
+                "  font-size: 1.05rem;",
+                "  line-height: 1.6;",
+                "}",
+                "",
+                "button {",
+                "  width: fit-content;",
+                "  border: 0;",
+                "  border-radius: 6px;",
+                "  background: #111827;",
+                "  color: white;",
+                "  padding: 12px 16px;",
+                "  font: inherit;",
+                "  font-weight: 700;",
+                "}",
+                "",
+            ]
+        )
+    )
+    (codebase_dir / "playwright.config.ts").write_text(
+        "\n".join(
+            [
+                "import { defineConfig, devices } from '@playwright/test';",
+                "",
+                "export default defineConfig({",
+                "  testDir: './tests',",
+                "  timeout: 30_000,",
+                "  use: {",
+                "    baseURL: 'http://127.0.0.1:4173',",
+                "    trace: 'retain-on-failure',",
+                "  },",
+                "  webServer: {",
+                "    command: 'npm run build && npx vite preview --host 127.0.0.1 --port 4173',",
+                "    url: 'http://127.0.0.1:4173',",
+                "    reuseExistingServer: false,",
+                "    timeout: 120_000,",
+                "  },",
+                "  projects: [",
+                "    { name: 'chromium-desktop', use: { ...devices['Desktop Chrome'] } },",
+                "    { name: 'mobile-webkit-shape', use: { ...devices['iPhone 14'] } },",
+                "  ],",
+                "});",
+                "",
+            ]
+        )
+    )
+    (codebase_dir / "tests" / "app.spec.ts").write_text(
+        "\n".join(
+            [
+                "import { expect, test } from '@playwright/test';",
+                "",
+                "test('renders the implemented app shell', async ({ page }) => {",
+                "  await page.goto('/');",
+                "  await expect(page.locator('#app')).toBeVisible();",
+                "  await expect(page.getByRole('heading')).toBeVisible();",
+                "});",
+                "",
+            ]
+        )
+    )
+    (codebase_dir / "docs" / "implementation-notes.md").write_text(
+        "# Implementation Notes\n\n"
+        "Use this file to record Figma extraction notes, implementation decisions, "
+        "and Playwright verification results.\n"
+    )
+    (codebase_dir / "README.md").write_text(
+        "# Figma Memory E2E App\n\n"
+        "A small frontend scaffold for semantic-memory instrumentation. The benchmark "
+        "task should replace the starter UI with a Figma-derived app and verify it "
+        "with Playwright.\n"
+    )
+
+    subprocess.run(["git", "-C", str(codebase_dir), "init", "--quiet"], check=True)
+    subprocess.run(["git", "-C", str(codebase_dir), "add", "."], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(codebase_dir),
+            "-c",
+            "user.name=Agent Harness",
+            "-c",
+            "user.email=agent-harness@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "Create frontend figma app scaffold",
         ],
         check=True,
     )
@@ -1065,7 +1278,7 @@ def _seed_agent_home(agent_home: Path) -> None:
     dst_claude = agent_home / ".claude"
     for name in ("settings.json", "settings.local.json", "CLAUDE.md"):
         _copy_if_exists(host_claude / name, dst_claude / name)
-    for name in ("skills", "agents", "commands"):
+    for name in ("skills", "agents", "commands", "plugins"):
         _copytree_if_exists(host_claude / name, dst_claude / name)
     claude_json = agent_home / ".claude.json"
     if not claude_json.exists():

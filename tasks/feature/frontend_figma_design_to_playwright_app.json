@@ -1,0 +1,14 @@
+{
+  "kind": "feature",
+  "name": "frontend_figma_design_to_playwright_app",
+  "prompt": "Build the app in this repository from a Figma design, then verify it with Playwright. This is a semantic-memory instrumentation task, so work in explicit phases and leave notes in docs/implementation-notes.md after each phase.\n\nPhase 1: Establish design source. Check whether a Figma MCP server is available in your tool surface. Use the Figma MCP to inspect the design referenced by FIGMA_FILE_URL and FIGMA_NODE_ID if those environment variables are set; otherwise use the MCP's available listing/search/read tools to find the supplied design context. Do not invent Figma details. If no Figma MCP tools are available, write FIGMA_MCP_UNAVAILABLE.md explaining exactly what was missing and stop without implementing the app.\n\nPhase 2: Extract design semantics. From Figma, capture the product concept, hierarchy, layout, key components, visual tokens, spacing, typography, colors, interaction states, and responsive expectations. Record a concise extraction summary in docs/implementation-notes.md.\n\nPhase 3: Implement. Replace the starter scaffold with a polished, responsive single-page app that follows the Figma design. Use packages only when they make the implementation more correct or testable. Keep source code maintainable and avoid decorative filler that is not grounded in the design.\n\nPhase 4: Verify with Playwright. Add or update Playwright tests that validate the primary viewport, at least one mobile viewport, key visible content, and at least one interaction. Run npm install if dependencies are missing, then run npm run build and npm run test:e2e. If browser installation is blocked by the environment, still run the build, document the exact Playwright blocker, and leave the tests in place.\n\nFinal response: summarize the Figma evidence used, files changed, tests run, and any environment blockers.",
+  "codebase": "frontend_figma_app",
+  "oracle": {
+    "semantic_memory_probe": true,
+    "probe_shape": "figma_design_implementation_playwright",
+    "expected_notes_file": "docs/implementation-notes.md",
+    "figma_required": true,
+    "test_cmd": "npm run build && npm run test:e2e",
+    "timeout_s": 3600
+  }
+}

@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img">
+<style>
+text{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#111827} .muted{fill:#6b7280} .grid{stroke:#e5e7eb;stroke-width:1} .axis{stroke:#9ca3af;stroke-width:1.2} .line{fill:none;stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round} .dot{stroke:white;stroke-width:1.2}
+</style>
+<rect width='100%' height='100%' fill='#ffffff'/>
+<text x='36' y='42' font-size='26' font-weight='700'>Skill Headers Loaded</text>
+<text x='36' y='68' font-size='14' class='muted'>Codex vs. Claude Code, request-level points over elapsed wall-clock time. Y axis: skill names visible in developer/skills inventory.</text>
+<line x1='1004' y1='38' x2='1038' y2='38' stroke='#2563eb' stroke-width='3'/>
+<circle cx='1021' cy='38' r='4' fill='#2563eb'/>
+<text x='1050' y='43' font-size='14'>Codex</text>
+<line x1='1004' y1='64' x2='1038' y2='64' stroke='#d97706' stroke-width='3'/>
+<circle cx='1021' cy='64' r='4' fill='#d97706'/>
+<text x='1050' y='69' font-size='14'>Claude Code</text>
+<text x='36.0' y='112.0' font-size='17' font-weight='700'>Frontend plugin E2E</text>
+<text x='36.0' y='131.0' font-size='12' class='muted'>x: elapsed minutes from first request</text>
+<line x1='110.00' y1='134.00' x2='110.00' y2='558.00' class='grid'/>
+<text x='110.00' y='581.00' font-size='11' text-anchor='middle' class='muted'>0</text>
+<line x1='667.00' y1='134.00' x2='667.00' y2='558.00' class='grid'/>
+<text x='667.00' y='581.00' font-size='11' text-anchor='middle' class='muted'>5</text>
+<line x1='1224.00' y1='134.00' x2='1224.00' y2='558.00' class='grid'/>
+<text x='1224.00' y='581.00' font-size='11' text-anchor='middle' class='muted'>10</text>
+<line x1='110.00' y1='558.00' x2='1224.00' y2='558.00' class='grid'/>
+<text x='100.00' y='562.00' font-size='11' text-anchor='end' class='muted'>0</text>
+<line x1='110.00' y1='346.00' x2='1224.00' y2='346.00' class='grid'/>
+<text x='100.00' y='350.00' font-size='11' text-anchor='end' class='muted'>10</text>
+<line x1='110.00' y1='134.00' x2='1224.00' y2='134.00' class='grid'/>
+<text x='100.00' y='138.00' font-size='11' text-anchor='end' class='muted'>20</text>
+<line x1='110.00' y1='558.00' x2='1224.00' y2='558.00' class='axis'/>
+<line x1='110.00' y1='134.00' x2='110.00' y2='558.00' class='axis'/>
+<text x='56.00' y='123.00' font-size='11' class='muted'>skill headers</text>
+<path d='M 110.00 430.80 L 117.46 430.80 L 123.97 430.80 L 131.11 430.80 L 136.85 430.80 L 141.89 430.80 L 175.42 430.80 L 194.59 430.80 L 210.35 430.80 L 307.91 430.80 L 383.61 430.80 L 440.87 430.80 L 450.68 430.80 L 457.97 430.80 L 468.55 430.80 L 477.16 430.80 L 532.17 430.80 L 573.08 430.80 L 583.91 430.80 L 592.37 430.80 L 625.13 430.80 L 632.84 430.80 L 653.64 430.80 L 662.91 430.80 L 673.50 430.80 L 686.94 430.80 L 696.61 430.80 L 702.24 430.80 L 708.96 430.80 L 741.81 430.80 L 823.05 430.80 L 829.56 430.80 L 837.47 430.80 L 871.92 430.80 L 905.26 430.80 L 924.57 430.80 L 938.42 430.80 L 947.82 430.80 L 961.92 430.80 L 968.49 430.80 L 998.41 430.80 L 1009.05 430.80 L 1016.55 430.80 L 1022.92 430.80 L 1031.23 430.80' class='line' stroke='#2563eb'/>
+<circle cx='110.00' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 1: 6 at 0.00 min</title></circle>
+<circle cx='117.46' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 2: 6 at 0.07 min</title></circle>
+<circle cx='123.97' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 3: 6 at 0.13 min</title></circle>
+<circle cx='131.11' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 4: 6 at 0.19 min</title></circle>
+<circle cx='136.85' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 5: 6 at 0.24 min</title></circle>
+<circle cx='141.89' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 6: 6 at 0.29 min</title></circle>
+<circle cx='175.42' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 7: 6 at 0.59 min</title></circle>
+<circle cx='194.59' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 8: 6 at 0.76 min</title></circle>
+<circle cx='210.35' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 9: 6 at 0.90 min</title></circle>
+<circle cx='307.91' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 10: 6 at 1.78 min</title></circle>
+<circle cx='383.61' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 11: 6 at 2.46 min</title></circle>
+<circle cx='440.87' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 12: 6 at 2.97 min</title></circle>
+<circle cx='450.68' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 13: 6 at 3.06 min</title></circle>
+<circle cx='457.97' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 14: 6 at 3.12 min</title></circle>
+<circle cx='468.55' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 15: 6 at 3.22 min</title></circle>
+<circle cx='477.16' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 16: 6 at 3.30 min</title></circle>
+<circle cx='532.17' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 17: 6 at 3.79 min</title></circle>
+<circle cx='573.08' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 18: 6 at 4.16 min</title></circle>
+<circle cx='583.91' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 19: 6 at 4.25 min</title></circle>
+<circle cx='592.37' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 20: 6 at 4.33 min</title></circle>
+<circle cx='625.13' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 21: 6 at 4.62 min</title></circle>
+<circle cx='632.84' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 22: 6 at 4.69 min</title></circle>
+<circle cx='653.64' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 23: 6 at 4.88 min</title></circle>
+<circle cx='662.91' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 24: 6 at 4.96 min</title></circle>
+<circle cx='673.50' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 25: 6 at 5.06 min</title></circle>
+<circle cx='686.94' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 26: 6 at 5.18 min</title></circle>
+<circle cx='696.61' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 27: 6 at 5.27 min</title></circle>
+<circle cx='702.24' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 28: 6 at 5.32 min</title></circle>
+<circle cx='708.96' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 29: 6 at 5.38 min</title></circle>
+<circle cx='741.81' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 30: 6 at 5.67 min</title></circle>
+<circle cx='823.05' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 31: 6 at 6.40 min</title></circle>
+<circle cx='829.56' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 32: 6 at 6.46 min</title></circle>
+<circle cx='837.47' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 33: 6 at 6.53 min</title></circle>
+<circle cx='871.92' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 34: 6 at 6.84 min</title></circle>
+<circle cx='905.26' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 35: 6 at 7.14 min</title></circle>
+<circle cx='924.57' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 36: 6 at 7.31 min</title></circle>
+<circle cx='938.42' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 37: 6 at 7.44 min</title></circle>
+<circle cx='947.82' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 38: 6 at 7.52 min</title></circle>
+<circle cx='961.92' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 39: 6 at 7.65 min</title></circle>
+<circle cx='968.49' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 40: 6 at 7.71 min</title></circle>
+<circle cx='998.41' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 41: 6 at 7.97 min</title></circle>
+<circle cx='1009.05' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 42: 6 at 8.07 min</title></circle>
+<circle cx='1016.55' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 43: 6 at 8.14 min</title></circle>
+<circle cx='1022.92' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 44: 6 at 8.19 min</title></circle>
+<circle cx='1031.23' cy='430.80' r='2.2' fill='#2563eb' class='dot'><title>Codex, request 45: 6 at 8.27 min</title></circle>
+<path d='M 110.00 558.00 L 110.09 261.20 L 120.49 261.20 L 125.66 261.20 L 132.57 261.20 L 148.73 261.20 L 164.58 261.20 L 193.71 261.20 L 201.28 261.20 L 210.21 261.20 L 231.97 261.20 L 375.87 261.20 L 542.83 261.20 L 551.03 261.20 L 558.23 261.20 L 638.80 261.20 L 681.12 261.20 L 707.81 261.20 L 722.74 261.20 L 730.79 261.20 L 768.47 261.20 L 804.05 261.20 L 826.42 261.20 L 873.98 261.20 L 888.34 261.20 L 899.39 261.20 L 910.35 261.20 L 916.83 261.20 L 923.22 261.20 L 950.03 261.20 L 955.80 261.20 L 962.96 261.20' class='line' stroke='#d97706'/>
+<circle cx='110.00' cy='558.00' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 1: 0 at 0.00 min</title></circle>
+<circle cx='110.09' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 2: 14 at 0.00 min</title></circle>
+<circle cx='120.49' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 3: 14 at 0.09 min</title></circle>
+<circle cx='125.66' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 4: 14 at 0.14 min</title></circle>
+<circle cx='132.57' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 5: 14 at 0.20 min</title></circle>
+<circle cx='148.73' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 6: 14 at 0.35 min</title></circle>
+<circle cx='164.58' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 7: 14 at 0.49 min</title></circle>
+<circle cx='193.71' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 8: 14 at 0.75 min</title></circle>
+<circle cx='201.28' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 9: 14 at 0.82 min</title></circle>
+<circle cx='210.21' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 10: 14 at 0.90 min</title></circle>
+<circle cx='231.97' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 11: 14 at 1.09 min</title></circle>
+<circle cx='375.87' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 12: 14 at 2.39 min</title></circle>
+<circle cx='542.83' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 13: 14 at 3.89 min</title></circle>
+<circle cx='551.03' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 14: 14 at 3.96 min</title></circle>
+<circle cx='558.23' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 15: 14 at 4.02 min</title></circle>
+<circle cx='638.80' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 16: 14 at 4.75 min</title></circle>
+<circle cx='681.12' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 17: 14 at 5.13 min</title></circle>
+<circle cx='707.81' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 18: 14 at 5.37 min</title></circle>
+<circle cx='722.74' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 19: 14 at 5.50 min</title></circle>
+<circle cx='730.79' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 20: 14 at 5.57 min</title></circle>
+<circle cx='768.47' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 21: 14 at 5.91 min</title></circle>
+<circle cx='804.05' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 22: 14 at 6.23 min</title></circle>
+<circle cx='826.42' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 23: 14 at 6.43 min</title></circle>
+<circle cx='873.98' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 24: 14 at 6.86 min</title></circle>
+<circle cx='888.34' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 25: 14 at 6.99 min</title></circle>
+<circle cx='899.39' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 26: 14 at 7.09 min</title></circle>
+<circle cx='910.35' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 27: 14 at 7.18 min</title></circle>
+<circle cx='916.83' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 28: 14 at 7.24 min</title></circle>
+<circle cx='923.22' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 29: 14 at 7.30 min</title></circle>
+<circle cx='950.03' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 30: 14 at 7.54 min</title></circle>
+<circle cx='955.80' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 31: 14 at 7.59 min</title></circle>
+<circle cx='962.96' cy='261.20' r='3.4' fill='#d97706' class='dot'><title>Claude Code, request 32: 14 at 7.66 min</title></circle>
+</svg>

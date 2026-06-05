@@ -41,6 +41,8 @@ Mechanically, each model API call is a fresh request body. The model does not au
 
 For billing and total work accounting, the subagent requests should still be counted. For active-context accounting, the drop is real because the parent request no longer contains the subagent's full working history. These are different measurements: active context window versus cumulative token consumption.
 
+The active-tools plot shows the same boundary. Claude Code parent requests advertise the full 27-tool surface. The Explore subagent requests advertise a reduced 17-tool surface: `Bash`, `CronCreate`, `CronDelete`, `CronList`, `EnterWorktree`, `ExitWorktree`, `Glob`, `Grep`, `Read`, `Skill`, `TaskCreate`, `TaskGet`, `TaskList`, `TaskStop`, `TaskUpdate`, `WebFetch`, and `WebSearch`. The reduced surface removes parent-level orchestration and editing tools such as `Agent`, `Edit`, `Write`, `Workflow`, plan-mode tools, notebook editing, and user-question tooling. So the tool-count dips are not random schema churn; they mark the subagent execution scope.
+
 | task | agent | request transition | from tokens | to tokens | drop | interpretation |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
 | Redis GETEX tests | Claude Code | 2 -> 3 | 20,847 | 9,972 | 10,875 | Main-agent prompt handed work to a reduced 17-tool Explore subagent. |

@@ -67,6 +67,13 @@ class ClaudeCodeAdapter(AgentAdapter):
             "CLAUDE_DISABLE_SLASH_COMMANDS": "${CLAUDE_DISABLE_SLASH_COMMANDS}",
             "CLAUDE_TRACE": "${CLAUDE_TRACE}",
             "CLAUDE_TRACE_LOG_NAME": "${CLAUDE_TRACE_LOG_NAME}",
+            "CLAUDE_MCP_CONFIG": "${CLAUDE_MCP_CONFIG}",
+            "CLAUDE_STRICT_MCP_CONFIG": "${CLAUDE_STRICT_MCP_CONFIG}",
+            "CLAUDE_PLUGIN_DIR": "${CLAUDE_PLUGIN_DIR}",
+            "CLAUDE_PLUGIN_DIRS": "${CLAUDE_PLUGIN_DIRS}",
+            "FIGMA_FILE_URL": "${FIGMA_FILE_URL}",
+            "FIGMA_NODE_ID": "${FIGMA_NODE_ID}",
+            "FIGMA_API_TOKEN": "${FIGMA_API_TOKEN}",
             "NO_COLOR": "1",
         }
 
@@ -100,6 +107,20 @@ class ClaudeCodeAdapter(AgentAdapter):
             command.append("--bare")
         if os.environ.get("CLAUDE_DISABLE_SLASH_COMMANDS", "").lower() in {"1", "true", "yes"}:
             command.append("--disable-slash-commands")
+        mcp_config = os.environ.get("CLAUDE_MCP_CONFIG")
+        if mcp_config:
+            command.extend(["--mcp-config", mcp_config])
+        if os.environ.get("CLAUDE_STRICT_MCP_CONFIG", "").lower() in {"1", "true", "yes"}:
+            command.append("--strict-mcp-config")
+        plugin_dirs = []
+        if os.environ.get("CLAUDE_PLUGIN_DIR"):
+            plugin_dirs.append(os.environ["CLAUDE_PLUGIN_DIR"])
+        if os.environ.get("CLAUDE_PLUGIN_DIRS"):
+            plugin_dirs.extend(
+                path for path in os.environ["CLAUDE_PLUGIN_DIRS"].split(os.pathsep) if path
+            )
+        for plugin_dir in plugin_dirs:
+            command.extend(["--plugin-dir", plugin_dir])
         if os.environ.get("CLAUDE_TRACE", "").lower() in {"1", "true", "yes"}:
             trace_command = [
                 "claude-trace",

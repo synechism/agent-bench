@@ -12,6 +12,7 @@ import html
 import json
 import math
 import re
+import argparse
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -19,8 +20,13 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "docs" / "semantic_memory" / "context_growth_plots_20260604"
-EXACT_TOKEN_PATH = OUT_DIR / "exact_context_tokens.jsonl"
+SCENARIO_OUT_DIRS = {
+    "redis": ROOT / "docs" / "semantic_memory" / "context_growth_plots_20260604",
+    "frontend_plugin": ROOT
+    / "docs"
+    / "semantic_memory"
+    / "context_growth_plots_frontend_plugin_20260605",
+}
 
 
 @dataclass(frozen=True)
@@ -31,7 +37,7 @@ class RunSpec:
     run_dir: Path
 
 
-RUNS = [
+REDIS_RUNS = [
     RunSpec(
         "Codex",
         "empty",
@@ -94,8 +100,44 @@ RUNS = [
     ),
 ]
 
+FRONTEND_PLUGIN_RUNS = [
+    RunSpec(
+        "Codex",
+        "frontend_plugin",
+        "Frontend plugin E2E",
+        ROOT
+        / "runs"
+        / "20260605T142450_codex_frontend_plugin_app_frontend_plugin_design_to_playwright_app_nocap_rep0",
+    ),
+    RunSpec(
+        "Claude Code",
+        "frontend_plugin",
+        "Frontend plugin E2E",
+        ROOT
+        / "runs"
+        / "20260605T143603_claude_code_frontend_plugin_app_frontend_plugin_design_to_playwright_app_nocap_rep0",
+    ),
+]
 
-TASK_ORDER = ["empty", "getex_event", "getex_tests", "expire_options"]
+SCENARIO_RUNS = {
+    "redis": REDIS_RUNS,
+    "frontend_plugin": FRONTEND_PLUGIN_RUNS,
+}
+
+SCENARIO_TASK_ORDERS = {
+    "redis": ["empty", "getex_event", "getex_tests", "expire_options"],
+    "frontend_plugin": ["frontend_plugin"],
+}
+
+SCENARIO_TITLES = {
+    "redis": "Codex vs. Claude Code Context Growth Plots - 2026-06-04",
+    "frontend_plugin": "Frontend Plugin E2E Context Growth Plots - 2026-06-05",
+}
+
+SCENARIO_DESCRIPTIONS = {
+    "redis": "matched representative task runs",
+    "frontend_plugin": "matched long-horizon frontend/plugin implementation runs",
+}
 AGENT_COLORS = {
     "Codex": "#2563eb",
     "Claude Code": "#d97706",
@@ -141,11 +183,11 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _load_exact_tokens() -> dict[tuple[str, int], int]:
+def _load_exact_tokens(path: Path) -> dict[tuple[str, int], int]:
     exact: dict[tuple[str, int], int] = {}
-    if not EXACT_TOKEN_PATH.exists():
+    if not path.exists():
         return exact
-    for line in EXACT_TOKEN_PATH.read_text(errors="replace").splitlines():
+    for line in path.read_text(errors="replace").splitlines():
         if not line.strip():
             continue
         row = json.loads(line)
@@ -186,6 +228,10 @@ def _developer_context_text(record: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+def _normalize_skill_name(name: str) -> str:
+    return name.rsplit(":", 1)[-1]
+
+
 def _skill_headers_loaded(record: dict[str, Any]) -> int:
     text = _developer_context_text(record)
     if not text:
@@ -203,13 +249,36 @@ def _skill_headers_loaded(record: dict[str, Any]) -> int:
         sections.append(text.split(claude_marker, 1)[1])
 
     search_text = "\n".join(sections) if sections else text
-    names = set(re.findall(r"(?m)^\s*-\s+([a-z][a-z0-9_.-]*):\s+", search_text))
+    names = set(
+        re.findall(
+            r"(?m)^\s*-\s+([a-z][a-z0-9_.-]*(?::[a-z][a-z0-9_.-]*)?):\s+",
+            search_text,
+        )
+    )
     return len(names)
 
 
 def _active_skills(record: dict[str, Any]) -> int:
     items = ((record.get("input") or {}).get("items") or [])
-    return sum(1 for item in items if str(item.get("name") or "").lower() == "skill")
+    names: set[str] = set()
+    invocation_count = 0
+    for item in items:
+        capture = _capture_to_text(item.get("capture"))
+        tool_name = str(item.get("name") or "")
+        if tool_name.lower() == "skill":
+            invocation_count += 1
+            match = re.search(r'"skill"\s*:\s*"([^"]+)"', capture)
+            names.add(_normalize_skill_name(match.group(1)) if match else "Skill")
+
+        base_dir = re.search(r"Base directory for this skill:\s+\S*/skills/([^/\s]+)", capture)
+        if base_dir:
+            names.add(_normalize_skill_name(base_dir.group(1)))
+
+        frontmatter = re.search(r"(?m)^name:\s*([a-z][a-z0-9_.-]*)\s*$", capture)
+        if frontmatter and ("SKILL.md" in capture or "# Frontend Design" in capture):
+            names.add(_normalize_skill_name(frontmatter.group(1)))
+
+    return len(names) if names else invocation_count
 
 
 def _context_tokens(record: dict[str, Any]) -> int:
@@ -221,10 +290,10 @@ def _context_tokens(record: dict[str, Any]) -> int:
     return total
 
 
-def collect_rows() -> list[dict[str, Any]]:
+def collect_rows(run_specs: list[RunSpec], exact_token_path: Path) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
-    exact_tokens = _load_exact_tokens()
-    for spec in RUNS:
+    exact_tokens = _load_exact_tokens(exact_token_path)
+    for spec in run_specs:
         records = _load_jsonl(spec.run_dir / "prompt_payloads.jsonl")
         if not records:
             continue
@@ -360,16 +429,20 @@ def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
         writer.writerows(rows)
 
 
-def write_metric_svg(rows: list[dict[str, Any]], metric: str, path: Path) -> None:
+def write_metric_svg(
+    rows: list[dict[str, Any]], metric: str, path: Path, task_order: list[str]
+) -> None:
     cfg = METRICS[metric]
     width = 1280
-    height = 900
+    panel_cols = 1 if len(task_order) == 1 else 2
+    panel_rows = max(1, math.ceil(len(task_order) / panel_cols))
+    height = 640 if len(task_order) == 1 else 900
     margin = 36
     header = 92
     gap_x = 52
     gap_y = 76
-    panel_w = (width - 2 * margin - gap_x) / 2
-    panel_h = (height - header - margin - gap_y) / 2
+    panel_w = (width - 2 * margin - gap_x * (panel_cols - 1)) / panel_cols
+    panel_h = (height - header - margin - gap_y * (panel_rows - 1)) / panel_rows
     plot_left_pad = 74
     plot_bottom_pad = 46
     plot_top_pad = 42
@@ -406,9 +479,9 @@ def write_metric_svg(rows: list[dict[str, Any]], metric: str, path: Path) -> Non
         parts.append(f"<circle cx='{legend_x + 17}' cy='{y}' r='4' fill='{color}'/>")
         parts.append(f"<text x='{legend_x + 46}' y='{y + 5}' font-size='14'>{html.escape(agent)}</text>")
 
-    for idx, task_key in enumerate(TASK_ORDER):
-        col = idx % 2
-        row = idx // 2
+    for idx, task_key in enumerate(task_order):
+        col = idx % panel_cols
+        row = idx // panel_cols
         panel_x = margin + col * (panel_w + gap_x)
         panel_y = header + row * (panel_h + gap_y)
         task_rows = [r for r in rows if r["task_key"] == task_key]
@@ -485,12 +558,12 @@ def write_metric_svg(rows: list[dict[str, Any]], metric: str, path: Path) -> Non
     path.write_text("\n".join(parts) + "\n")
 
 
-def _summary_table(rows: list[dict[str, Any]]) -> list[str]:
+def _summary_table(rows: list[dict[str, Any]], task_order: list[str]) -> list[str]:
     lines = [
         "| task | agent | requests | duration min | peak context toks | tool counts | skill header counts | active skill counts |",
         "| --- | --- | ---: | ---: | ---: | --- | --- | --- |",
     ]
-    for task_key in TASK_ORDER:
+    for task_key in task_order:
         for agent in AGENT_COLORS:
             series = [r for r in rows if r["task_key"] == task_key and r["agent"] == agent]
             if not series:
@@ -508,12 +581,12 @@ def _summary_table(rows: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
-def _drop_table(rows: list[dict[str, Any]]) -> list[str]:
+def _drop_table(rows: list[dict[str, Any]], task_order: list[str]) -> list[str]:
     lines = [
         "| task | agent | request transition | from tokens | to tokens | drop | interpretation |",
         "| --- | --- | ---: | ---: | ---: | ---: | --- |",
     ]
-    for task_key in TASK_ORDER:
+    for task_key in task_order:
         for agent in AGENT_COLORS:
             series = sorted(
                 [r for r in rows if r["task_key"] == task_key and r["agent"] == agent],
@@ -539,12 +612,87 @@ def _drop_table(rows: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
-def write_report(rows: list[dict[str, Any]], path: Path) -> None:
+def write_report(
+    rows: list[dict[str, Any]],
+    path: Path,
+    *,
+    scenario: str,
+    task_order: list[str],
+) -> None:
     exact_rows = sum(1 for row in rows if row.get("context_tokens_source") == "exact_provider_count")
+    if scenario == "redis":
+        context_section_title = "Why The Context Line Drops"
+        context_notes = [
+            "The context window is measured per model request, not as a single global "
+            "memory pool across every Claude Code worker. In these runs, the downward "
+            "steps are Claude Code parent/subagent boundaries. The parent starts with "
+            "the full 27-tool surface, delegates exploration to a reduced 17-tool "
+            "Explore subagent whose own transcript grows, then receives a compact "
+            "`Agent` tool result summary. The parent does not ingest the subagent's "
+            "entire tool transcript.",
+            "",
+            "Mechanically, each model API call is a fresh request body. The model does "
+            "not automatically keep the previous request's full prompt unless the "
+            "agent sends that content again. So a subagent can spend many tokens while "
+            "it is active, then the next parent request can be smaller because Claude "
+            "Code resends only the parent transcript plus the subagent's summarized "
+            "`Agent` result. This is a context-window drop, not a refund or erasure of "
+            "tokens already spent.",
+            "",
+            "For billing and total work accounting, the subagent requests should still "
+            "be counted. For active-context accounting, the drop is real because the "
+            "parent request no longer contains the subagent's full working history. "
+            "These are different measurements: active context window versus cumulative "
+            "token consumption.",
+            "",
+            "The active-tools plot shows the same boundary. Claude Code parent requests "
+            "advertise the full 27-tool surface. The Explore subagent requests advertise "
+            "a reduced 17-tool surface: `Bash`, `CronCreate`, `CronDelete`, `CronList`, "
+            "`EnterWorktree`, `ExitWorktree`, `Glob`, `Grep`, `Read`, `Skill`, "
+            "`TaskCreate`, `TaskGet`, `TaskList`, `TaskStop`, `TaskUpdate`, `WebFetch`, "
+            "and `WebSearch`. The reduced surface removes parent-level orchestration and "
+            "editing tools such as `Agent`, `Edit`, `Write`, `Workflow`, plan-mode tools, "
+            "notebook editing, and user-question tooling. So the tool-count dips are not "
+            "random schema churn; they mark the subagent execution scope.",
+        ]
+        interpretation_notes = [
+            "- Claude Code has an initial title/metadata-style request with no tools before the main agent request. "
+            "That request is included because it is a real captured model request; the main-agent context jump appears immediately after it.",
+            "- Codex advertises a stable 12-tool surface in these runs. Claude Code alternates between "
+            "a 27-tool main-agent surface and a 17-tool reduced surface in the more complex runs.",
+            "- Skill headers are available-context, not actual skill activation. In these matched runs, the skill inventory "
+            "is loaded before the skill body is active. `active_skills` marks visible Skill-tool invocation or loaded "
+            "skill-body evidence in the request context.",
+        ]
+    else:
+        context_section_title = "Context And Skill Interpretation"
+        context_notes = [
+            "For this long-horizon frontend/plugin run, neither agent used Claude-style Explore subagents. "
+            "The context line therefore mostly shows ordinary parent-thread growth: task prompt, static instructions, "
+            "tool schemas, file reads, edits, build/test output, and the loaded frontend-design skill body.",
+            "",
+            "The active-tools plot is intentionally boring here: Codex advertises the same 12-tool surface on every "
+            "request; Claude Code has one initial zero-tool title request and then advertises its 27-tool main-agent "
+            "surface throughout. That makes this run useful as a control for skill activation without subagent tool-surface changes.",
+            "",
+            "The active-skills plot is the key event marker. Skill headers are visible from the start as inventory, "
+            "but the skill body only becomes active after the agent explicitly opens or invokes `frontend-design`. "
+            "Codex reads the `SKILL.md` body through a file/tool path; Claude Code invokes the `Skill` tool and receives "
+            "a synthetic user message containing the plugin skill body.",
+        ]
+        interpretation_notes = [
+            "- Claude Code has an initial title/metadata-style request with no tools before the main agent request. "
+            "That request is included because it is a real captured model request.",
+            "- Codex advertises a stable 12-tool surface in this run. Claude Code switches from the zero-tool title "
+            "request to its 27-tool main-agent surface and stays there.",
+            "- Skill headers are available-context, not actual skill activation. `active_skills` marks visible Skill-tool "
+            "invocation or loaded skill-body evidence in the request context.",
+        ]
+
     lines = [
-        "# Codex vs. Claude Code Context Growth Plots - 2026-06-04",
+        f"# {SCENARIO_TITLES[scenario]}",
         "",
-        "This report plots the matched representative task runs at the level of model API requests. "
+        f"This report plots the {SCENARIO_DESCRIPTIONS[scenario]} at the level of model API requests. "
         "Each point is one request captured in `prompt_payloads.jsonl`; the x-axis is elapsed "
         "wall-clock time from the first captured request in that run. Provider `count_tokens` "
         "probe requests are excluded from the main plots because they are tokenizer checks, not "
@@ -558,7 +706,7 @@ def write_report(rows: list[dict[str, Any]], path: Path) -> None:
         "marks the row as a semantic chars/4 fallback.",
         "- `active_tools`: count of top-level tools advertised to the model on that request.",
         "- `skill_headers_loaded`: count of skill names visible in the developer/skills inventory text.",
-        "- `active_skills`: count of visible `Skill` tool invocations in the request context.",
+        "- `active_skills`: count of visible `Skill` tool invocations or loaded skill bodies in the request context.",
         f"- Exact coverage: {exact_rows}/{len(rows)} plotted generation requests have provider-counted input tokens.",
         "",
         "## Plots",
@@ -573,42 +721,17 @@ def write_report(rows: list[dict[str, Any]], path: Path) -> None:
         "",
         "## Summary Table",
         "",
-        *_summary_table(rows),
+        *_summary_table(rows, task_order),
         "",
-        "## Why The Context Line Drops",
+        f"## {context_section_title}",
         "",
-        "The context window is measured per model request, not as a single global "
-        "memory pool across every Claude Code worker. In these runs, the downward "
-        "steps are Claude Code parent/subagent boundaries. The parent starts with "
-        "the full 27-tool surface, delegates exploration to a reduced 17-tool "
-        "Explore subagent whose own transcript grows, then receives a compact "
-        "`Agent` tool result summary. The parent does not ingest the subagent's "
-        "entire tool transcript.",
+        *context_notes,
         "",
-        "Mechanically, each model API call is a fresh request body. The model does "
-        "not automatically keep the previous request's full prompt unless the "
-        "agent sends that content again. So a subagent can spend many tokens while "
-        "it is active, then the next parent request can be smaller because Claude "
-        "Code resends only the parent transcript plus the subagent's summarized "
-        "`Agent` result. This is a context-window drop, not a refund or erasure of "
-        "tokens already spent.",
-        "",
-        "For billing and total work accounting, the subagent requests should still "
-        "be counted. For active-context accounting, the drop is real because the "
-        "parent request no longer contains the subagent's full working history. "
-        "These are different measurements: active context window versus cumulative "
-        "token consumption.",
-        "",
-        *_drop_table(rows),
+        *_drop_table(rows, task_order),
         "",
         "## Interpretation Notes",
         "",
-        "- Claude Code has an initial title/metadata-style request with no tools before the main agent request. "
-        "That request is included because it is a real captured model request; the main-agent context jump appears immediately after it.",
-        "- Codex advertises a stable 12-tool surface in these representative runs. Claude Code alternates between "
-        "a 27-tool main-agent surface and a 17-tool reduced surface in the more complex runs.",
-        "- Skill headers are available-context, not actual skill activation. In these matched runs, the skill inventory "
-        "is loaded, but actual skill activation remains zero.",
+        *interpretation_notes,
         "- The CSV next to this report includes `semantic_approx_tokens`, layer-level approximate "
         "token columns, and `body_approx_tokens` so the exact total can be audited against the older "
         "semantic estimate and raw request-body size.",
@@ -622,13 +745,30 @@ def write_report(rows: list[dict[str, Any]], path: Path) -> None:
 
 
 def main() -> None:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    rows = collect_rows()
-    write_csv(rows, OUT_DIR / "context_growth_timeseries.csv")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--scenario",
+        choices=sorted(SCENARIO_RUNS),
+        default="redis",
+        help="Captured run set to plot.",
+    )
+    args = parser.parse_args()
+    out_dir = SCENARIO_OUT_DIRS[args.scenario]
+    exact_token_path = out_dir / "exact_context_tokens.jsonl"
+    task_order = SCENARIO_TASK_ORDERS[args.scenario]
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows = collect_rows(SCENARIO_RUNS[args.scenario], exact_token_path)
+    write_csv(rows, out_dir / "context_growth_timeseries.csv")
     for metric, cfg in METRICS.items():
-        write_metric_svg(rows, metric, OUT_DIR / str(cfg["file"]))
-    write_report(rows, OUT_DIR / "README.md")
-    print(f"Wrote {len(rows)} request rows to {OUT_DIR}")
+        write_metric_svg(rows, metric, out_dir / str(cfg["file"]), task_order)
+    write_report(
+        rows,
+        out_dir / "README.md",
+        scenario=args.scenario,
+        task_order=task_order,
+    )
+    print(f"Wrote {len(rows)} request rows to {out_dir}")
 
 
 if __name__ == "__main__":

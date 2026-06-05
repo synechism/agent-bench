@@ -65,6 +65,11 @@ class CodexAdapter(AgentAdapter):
             "CODEX_DEVELOPER_INSTRUCTIONS": "${CODEX_DEVELOPER_INSTRUCTIONS}",
             "CODEX_INCLUDE_PERMISSIONS_INSTRUCTIONS": "${CODEX_INCLUDE_PERMISSIONS_INSTRUCTIONS}",
             "CODEX_INCLUDE_SKILL_INSTRUCTIONS": "${CODEX_INCLUDE_SKILL_INSTRUCTIONS}",
+            "CODEX_MCP_FIGMA_URL": "${CODEX_MCP_FIGMA_URL}",
+            "CODEX_MCP_FIGMA_TOKEN_ENV_VAR": "${CODEX_MCP_FIGMA_TOKEN_ENV_VAR}",
+            "FIGMA_FILE_URL": "${FIGMA_FILE_URL}",
+            "FIGMA_NODE_ID": "${FIGMA_NODE_ID}",
+            "FIGMA_API_TOKEN": "${FIGMA_API_TOKEN}",
             "NO_COLOR": "1",
         }
 
@@ -98,6 +103,12 @@ class CodexAdapter(AgentAdapter):
         include_skills = os.environ.get("CODEX_INCLUDE_SKILL_INSTRUCTIONS")
         if include_skills:
             flags.extend(["-c", f"include_skill_instructions={include_skills.lower()}"])
+        figma_mcp_url = os.environ.get("CODEX_MCP_FIGMA_URL")
+        if figma_mcp_url:
+            flags.extend(["-c", f'mcp_servers.figma.url="{figma_mcp_url}"'])
+        figma_token_env = os.environ.get("CODEX_MCP_FIGMA_TOKEN_ENV_VAR")
+        if figma_mcp_url and figma_token_env:
+            flags.extend(["-c", f'mcp_servers.figma.bearer_token_env_var="{figma_token_env}"'])
         return flags
 
     def build_command(self, task: TaskSpec) -> list[str]:

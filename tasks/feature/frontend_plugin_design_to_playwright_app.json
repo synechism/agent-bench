@@ -1,0 +1,14 @@
+{
+  "kind": "feature",
+  "name": "frontend_plugin_design_to_playwright_app",
+  "prompt": "Build a polished single-page web app in this repository using the available frontend design plugin/skill, then verify it with Playwright. Do not use Figma, MCP, local design files, or external design artifacts. The design source is the product brief below plus the installed design skill/plugin.\n\nProduct brief: create a working dashboard for an independent coffee roaster that helps the owner plan weekly roasting. The app should show green coffee inventory, roast queue, roast profile targets, order demand, and a simple what-if planner for batch size. The audience is an operator using it repeatedly during a busy production day, so prioritize clarity, scanning, and useful controls over marketing copy.\n\nPhase 1: Explicitly use the available frontend-design skill/plugin if the agent exposes one. Record in docs/implementation-notes.md whether a design skill/plugin was visible and whether you used it.\n\nPhase 2: Design and implement the app. Replace the starter scaffold with a responsive, production-quality interface. It must include at least one interactive control that updates visible planning output, real dashboard data, and sensible desktop/mobile layouts. Do not make a landing page.\n\nPhase 3: Add or update Playwright tests. Cover desktop rendering, mobile rendering, key dashboard content, and the interactive planning control.\n\nPhase 4: Run npm install if needed, then npm run build and npm run test:e2e. If browser installation is blocked by the environment, still run the build, keep the tests, and record the exact blocker in docs/implementation-notes.md.\n\nFinal response: summarize the design skill/plugin evidence, files changed, tests run, and any environment blockers.",
+  "codebase": "frontend_plugin_app",
+  "oracle": {
+    "semantic_memory_probe": true,
+    "probe_shape": "plugin_design_implementation_playwright",
+    "expected_notes_file": "docs/implementation-notes.md",
+    "requires_external_auth": false,
+    "test_cmd": "npm run build && npm run test:e2e",
+    "timeout_s": 3600
+  }
+}

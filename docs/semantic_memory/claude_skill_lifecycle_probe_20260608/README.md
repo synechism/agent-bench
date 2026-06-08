@@ -93,13 +93,66 @@ The important finding is that Superpowers has a real startup context cost, but i
 - The model then invoked the `Skill` tool with `skill=superpowers:brainstorming`. The next request contained the full brainstorming skill body as a user-role tool result, and that body remained in subsequent request context.
 - In this one-shot prompt, `writing-plans` was advertised but not invoked because the task explicitly stopped after brainstorming and the brainstorming skill requires user approval before transitioning to planning.
 
-## Source-Adjacent Instrumentation Note
+## Source-Code Instrumentation
 
-I added a Node preload probe at `instrumentation/claude_skill_fs_probe.js` and harness support via `CLAUDE_SKILL_FS_PROBE=1`. The probe logs skill/plugin-looking file reads and short JavaScript call stacks when a normal Node process reads skill files.
+I cloned the inspectable Claude Code source at commit `6f6f12b37f529488b10e53928dd5508bb93535c7` into `/tmp/claude-code-source` and added an opt-in JSONL probe gated by `CLAUDE_CODE_SKILL_LIFECYCLE_LOG`. The patch is saved at `source_instrumentation/claude_code_skill_lifecycle_probe.patch`.
 
-Smoke test: the probe works inside the `agent-harness/claude_code:latest` image for a plain `node -e` read of `skills/brainstorming/SKILL.md`.
+The key source path is:
 
-Claude Code run: the same probe did not produce a filesystem log during the real Claude Code run, even though `NODE_OPTIONS` reached the container. That means this Claude Code image is not exposing the relevant skill-load path through normal Node preload hooks. The next safe instrumentation layer is OS-level file-open tracing around the official CLI, or an authorized instrumentable build. I did not clone or run source described as leaked proprietary code.
+```text
+enabled plugin settings
+  -> loadAllPluginsCacheOnly()
+  -> getPluginSkills()
+  -> loadSkillsFromDirectory()
+  -> createPluginCommand()
+  -> getSkillListingAttachments()
+  -> formatCommandsWithinBudget()
+  -> model sees names/descriptions
+  -> SkillTool.validateInput()
+  -> SkillTool.call()
+  -> processPromptSlashCommand()
+  -> getMessagesForPromptSlashCommand()
+  -> command.getPromptForCommand()
+  -> full SKILL.md body becomes a synthetic user message
+  -> addInvokedSkill() preserves it for compaction restore
+```
+
+Concrete code sites:
+
+| source file | role |
+| --- | --- |
+| `src/utils/plugins/pluginLoader.ts` | Reads enabled marketplace plugins and resolves each plugin from installed/cache paths. |
+| `src/utils/plugins/loadPluginCommands.ts` | Reads plugin `skills/*/SKILL.md`, parses frontmatter, and creates prompt commands. |
+| `src/skills/loadSkillsDir.ts` | Equivalent loader for user/project `.claude/skills/*/SKILL.md`. |
+| `src/tools/SkillTool/prompt.ts` | Formats the model-visible skill listing under an 8000-char default budget. |
+| `src/utils/attachments.ts` | Emits the skill-listing attachment once per agent for newly visible skills. |
+| `src/utils/sessionStart.ts` and `src/utils/hooks.ts` | Execute `SessionStart` hooks and inject returned `additionalContext`. |
+| `src/tools/SkillTool/SkillTool.ts` | Validates and dispatches model `Skill(...)` calls. |
+| `src/utils/processUserInput/processSlashCommand.tsx` | Expands the selected skill into full prompt text and registers it as invoked. |
+
+The instrumented source confirmed the architecture strongly:
+
+- At startup, Claude Code reads each installed plugin skill's `SKILL.md` to parse frontmatter and metadata. In our local setup this found `frontend-design:frontend-design` plus 14 `superpowers:*` skills.
+- The initial model-facing skill listing is metadata only. A direct source probe formatted 15 skill headers into 2,763 chars, including `superpowers:brainstorming` as a one-line description.
+- The full `superpowers:brainstorming` body is not inserted by plugin discovery. A direct source probe loaded it only when `getPromptForCommand()` was called for that skill; the expanded body was 10,490 chars after adding the base-directory prefix and arguments.
+- Superpowers' unconditional startup payload is separate: its `SessionStart` hook returns `additionalContext` containing `using-superpowers`. The source CLI startup probe measured 5,632 chars for that hook context.
+- The word `brainstorm` itself is not a hard-coded source trigger. The source exposes skill headers and hook instructions; the model decides to call `Skill("superpowers:brainstorming")`; only then does the tool load the body.
+
+I also made Superpowers persistent in local Claude Code plugin config, not just session-scoped:
+
+```text
+~/.claude/plugins/known_marketplaces.json
+~/.claude/plugins/installed_plugins.json
+~/.claude/settings.json
+```
+
+The persistent install enables `superpowers@superpowers-local` and points it at `/home/abhi/.claude/plugins/cache/superpowers-local/5.1.0`.
+
+Validation notes:
+
+- `bun run src/entrypoints/cli.tsx --version` works from the source tree.
+- Full `bun run typecheck` and `bun run build` fail on unrelated upstream/source-package issues such as missing private/generated modules and optional dependencies. The instrumented source still runs far enough for direct loader probes and CLI startup probes.
+- A real source-backed model call emitted plugin/frontmatter and hook lifecycle events, then hung before streaming output from the model endpoint; I stopped it rather than leave a dangling process.
 
 ## Data
 
@@ -108,3 +161,7 @@ Claude Code run: the same probe did not produce a filesystem log during the real
 - `context_dumps/01_session_start_hook_using_superpowers.md` - exact `SessionStart` hook additional context injected by Superpowers.
 - `context_dumps/02_initial_skill_inventory_request1.md` - exact request-1 developer/skills inventory after Superpowers is exposed.
 - `context_dumps/03_loaded_brainstorming_skill_tool_result.md` - exact synthetic user/tool-result text loaded after `Skill(superpowers:brainstorming)`.
+- `source_instrumentation/claude_code_skill_lifecycle_probe.patch` - opt-in source patch.
+- `source_instrumentation/source_cli_startup_probe.jsonl` - source CLI startup evidence for plugin frontmatter and `SessionStart` hook injection.
+- `source_instrumentation/direct_skill_listing_probe.jsonl` - direct source evidence for skill-listing formatting.
+- `source_instrumentation/direct_skill_body_probe.jsonl` - direct source evidence for full `superpowers:brainstorming` body loading.

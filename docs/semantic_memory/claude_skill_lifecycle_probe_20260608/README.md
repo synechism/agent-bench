@@ -105,3 +105,6 @@ Claude Code run: the same probe did not produce a filesystem log during the real
 
 - `skill_lifecycle_timeline.csv`
 - `skill_lifecycle_summary.json`
+- `context_dumps/01_session_start_hook_using_superpowers.md` - exact `SessionStart` hook additional context injected by Superpowers.
+- `context_dumps/02_initial_skill_inventory_request1.md` - exact request-1 developer/skills inventory after Superpowers is exposed.
+- `context_dumps/03_loaded_brainstorming_skill_tool_result.md` - exact synthetic user/tool-result text loaded after `Skill(superpowers:brainstorming)`.

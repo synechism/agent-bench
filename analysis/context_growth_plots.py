@@ -26,6 +26,10 @@ SCENARIO_OUT_DIRS = {
     / "docs"
     / "semantic_memory"
     / "context_growth_plots_frontend_plugin_20260605",
+    "frontend_package_plugin": ROOT
+    / "docs"
+    / "semantic_memory"
+    / "context_growth_plots_frontend_package_plugin_20260608",
 }
 
 
@@ -119,24 +123,47 @@ FRONTEND_PLUGIN_RUNS = [
     ),
 ]
 
+FRONTEND_PACKAGE_PLUGIN_RUNS = [
+    RunSpec(
+        "Codex",
+        "frontend_package_plugin",
+        "Frontend package/plugin E2E",
+        ROOT
+        / "runs"
+        / "20260608T014957_codex_frontend_package_plugin_app_frontend_package_plugin_ops_console_nocap_rep0",
+    ),
+    RunSpec(
+        "Claude Code",
+        "frontend_package_plugin",
+        "Frontend package/plugin E2E",
+        ROOT
+        / "runs"
+        / "20260608T014957_claude_code_frontend_package_plugin_app_frontend_package_plugin_ops_console_nocap_rep0",
+    ),
+]
+
 SCENARIO_RUNS = {
     "redis": REDIS_RUNS,
     "frontend_plugin": FRONTEND_PLUGIN_RUNS,
+    "frontend_package_plugin": FRONTEND_PACKAGE_PLUGIN_RUNS,
 }
 
 SCENARIO_TASK_ORDERS = {
     "redis": ["empty", "getex_event", "getex_tests", "expire_options"],
     "frontend_plugin": ["frontend_plugin"],
+    "frontend_package_plugin": ["frontend_package_plugin"],
 }
 
 SCENARIO_TITLES = {
     "redis": "Codex vs. Claude Code Context Growth Plots - 2026-06-04",
     "frontend_plugin": "Frontend Plugin E2E Context Growth Plots - 2026-06-05",
+    "frontend_package_plugin": "Frontend Package/Plugin E2E Context Growth Plots - 2026-06-08",
 }
 
 SCENARIO_DESCRIPTIONS = {
     "redis": "matched representative task runs",
     "frontend_plugin": "matched long-horizon frontend/plugin implementation runs",
+    "frontend_package_plugin": "matched multi-package frontend/plugin implementation runs",
 }
 AGENT_COLORS = {
     "Codex": "#2563eb",
@@ -700,14 +727,16 @@ def write_report(
         "",
         "## Definitions",
         "",
-        "- `context_tokens`: exact provider `input_tokens` from the Anthropic-compatible "
-        "`count_tokens` endpoint when present. Codex requests are first replayed through Moonbridge "
-        "to count the converted Anthropic/DeepSeek request. If an exact count is missing, the CSV "
-        "marks the row as a semantic chars/4 fallback.",
+        "- `context_tokens`: exact provider input-token totals. Codex requests are first replayed "
+        "through Moonbridge and counted against the converted Anthropic/DeepSeek request. Claude Code "
+        "requests use the Anthropic-compatible `count_tokens` endpoint when the full request body was "
+        "captured; if a request crosses the request-capture cap, the row can use the exact observed "
+        "response usage total (`input_tokens + cache_read_input_tokens + cache_creation_input_tokens`) "
+        "from `stdout.log`. If an exact count is missing, the CSV marks the row as a semantic chars/4 fallback.",
         "- `active_tools`: count of top-level tools advertised to the model on that request.",
         "- `skill_headers_loaded`: count of skill names visible in the developer/skills inventory text.",
         "- `active_skills`: count of visible `Skill` tool invocations or loaded skill bodies in the request context.",
-        f"- Exact coverage: {exact_rows}/{len(rows)} plotted generation requests have provider-counted input tokens.",
+        f"- Exact coverage: {exact_rows}/{len(rows)} plotted generation requests have exact provider input-token totals.",
         "",
         "## Plots",
         "",

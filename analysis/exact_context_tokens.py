@@ -35,6 +35,10 @@ SCENARIO_OUT_DIRS = {
     / "docs"
     / "semantic_memory"
     / "context_growth_plots_frontend_plugin_20260605",
+    "frontend_package_plugin": ROOT
+    / "docs"
+    / "semantic_memory"
+    / "context_growth_plots_frontend_package_plugin_20260608",
 }
 
 
@@ -106,9 +110,25 @@ FRONTEND_PLUGIN_RUNS = [
     ),
 ]
 
+FRONTEND_PACKAGE_PLUGIN_RUNS = [
+    RunSpec(
+        "Codex",
+        ROOT
+        / "runs"
+        / "20260608T014957_codex_frontend_package_plugin_app_frontend_package_plugin_ops_console_nocap_rep0",
+    ),
+    RunSpec(
+        "Claude Code",
+        ROOT
+        / "runs"
+        / "20260608T014957_claude_code_frontend_package_plugin_app_frontend_package_plugin_ops_console_nocap_rep0",
+    ),
+]
+
 SCENARIO_RUNS = {
     "redis": REDIS_RUNS,
     "frontend_plugin": FRONTEND_PLUGIN_RUNS,
+    "frontend_package_plugin": FRONTEND_PACKAGE_PLUGIN_RUNS,
 }
 
 
@@ -268,6 +288,53 @@ def _captured_body(record: dict[str, Any]) -> dict[str, Any]:
     if capture.get("capture_truncated"):
         raise ValueError(f"request {record.get('request_id')} capture is truncated")
     return json.loads(str(capture.get("capture") or "{}"))
+
+
+def _body_capture_truncated(record: dict[str, Any]) -> bool:
+    return bool((record.get("request_body_capture") or {}).get("capture_truncated"))
+
+
+def _claude_stdout_usage_counts(run_dir: Path) -> dict[int, int]:
+    """Return exact observed input-token totals keyed by request index.
+
+    Claude Code emits assistant-message usage to stdout. For this harness shape,
+    request 1 is a small title/metadata generation that does not appear as an
+    assistant message; each unique assistant message id after that maps to the
+    next captured generation request. The total active context for that request
+    is the non-cached input plus cache read/creation input.
+    """
+
+    path = run_dir / "stdout.log"
+    if not path.exists():
+        return {}
+
+    counts: dict[int, int] = {}
+    seen_ids: set[str] = set()
+    assistant_index = 0
+    for line in path.read_text(errors="replace").splitlines():
+        if not line.startswith("{"):
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("type") != "assistant":
+            continue
+        message = row.get("message") or {}
+        message_id = str(message.get("id") or "")
+        if not message_id or message_id in seen_ids:
+            continue
+        seen_ids.add(message_id)
+        assistant_index += 1
+        usage = message.get("usage") or {}
+        total = (
+            int(usage.get("input_tokens") or 0)
+            + int(usage.get("cache_read_input_tokens") or 0)
+            + int(usage.get("cache_creation_input_tokens") or 0)
+        )
+        if total:
+            counts[assistant_index + 1] = total
+    return counts
 
 
 def _count_tokens(body: dict[str, Any], headers: dict[str, Any] | None = None) -> int:
@@ -474,10 +541,35 @@ def backfill(
         records = _load_api_requests(spec.run_dir)
         if spec.agent != "Claude Code":
             continue
+        stdout_usage_counts = _claude_stdout_usage_counts(spec.run_dir)
         for record in records:
             request_index = int(record["_request_index"])
             key = (spec.run_dir.name, request_index)
             if key in rows_by_key:
+                continue
+            if _body_capture_truncated(record) and request_index in stdout_usage_counts:
+                exact = stdout_usage_counts[request_index]
+                rows_by_key[key] = {
+                    "agent": spec.agent,
+                    "run_id": spec.run_dir.name,
+                    "request_index": request_index,
+                    "request_id": record.get("request_id"),
+                    "path": record.get("path"),
+                    "method": "anthropic_response_usage_from_stdout",
+                    "source_body_sha256": (record.get("request_body_capture") or {}).get(
+                        "sha256"
+                    ),
+                    "counted_body_sha256": "",
+                    "exact_input_tokens": exact,
+                }
+                save_progress()
+                work_done += 1
+                print(
+                    f"counted {spec.agent} {spec.run_dir.name} request {request_index}: "
+                    f"{exact} (stdout usage)"
+                )
+                if limit and work_done >= limit:
+                    return list(rows_by_key.values())
                 continue
             body = _captured_body(record)
             exact = _count_tokens(body, record.get("headers") or {})

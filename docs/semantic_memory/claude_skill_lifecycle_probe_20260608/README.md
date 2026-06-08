@@ -26,6 +26,27 @@ No hook events were observed before session init.
 - `hook_started` `SessionStart:startup` injected 0 additional-context chars (0 raw stdout chars); skill frontmatter names seen: none.
 - `hook_response` `SessionStart:startup` injected 5,632 additional-context chars (5,973 raw stdout chars); skill frontmatter names seen: ['using-superpowers'].
 
+## Superpowers Hook Implementation
+
+The exact hook code is dumped in `context_dumps/04_superpowers_hook_implementation.md`. Conceptually, Superpowers implements the bootstrap as a normal Claude Code `SessionStart` plugin hook:
+
+```text
+plugin install exposes superpowers/.claude-plugin/plugin.json
+  -> Claude Code loads the plugin's hooks/hooks.json
+  -> hooks.json registers a SessionStart command hook
+  -> matcher is startup|clear|compact
+  -> async is false, so Claude Code waits for it before proceeding
+  -> command runs "${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd" session-start
+  -> run-hook.cmd is a cross-platform wrapper
+  -> wrapper executes hooks/session-start
+  -> session-start reads skills/using-superpowers/SKILL.md
+  -> wraps that full markdown body in an <EXTREMELY_IMPORTANT> block
+  -> prints JSON containing hookSpecificOutput.additionalContext
+  -> Claude Code adds that additionalContext to the next model request
+```
+
+The implementation is deliberately simple. The plugin does not call the model, does not inspect the user's prompt, and does not choose `brainstorming` itself. It only injects the full `using-superpowers` instructions at session start. Those instructions tell the model that it has Superpowers and must use relevant skills via the generic `Skill` tool. The later `superpowers:brainstorming` invocation is still model-mediated: the model reads the hook-injected bootstrap plus skill headers plus user prompt, then emits `Skill({ skill: "superpowers:brainstorming", ... })`.
+
 ## Request Timeline
 
 | run | request | skill headers | Skill calls | loaded bodies | loaded body chars |
@@ -359,6 +380,7 @@ Validation notes:
 - `context_dumps/01_session_start_hook_using_superpowers.md` - exact `SessionStart` hook additional context injected by Superpowers.
 - `context_dumps/02_initial_skill_inventory_request1.md` - exact request-1 developer/skills inventory after Superpowers is exposed.
 - `context_dumps/03_loaded_brainstorming_skill_tool_result.md` - exact synthetic user/tool-result text loaded after `Skill(superpowers:brainstorming)`.
+- `context_dumps/04_superpowers_hook_implementation.md` - exact Superpowers hook declaration, wrapper, and session-start script.
 - `model_output_evidence/brainstorm_skill_tool_use_request1.md` - exact assistant `tool_use` evidence that triggered the skill load.
 - `source_instrumentation/claude_code_skill_lifecycle_probe.patch` - opt-in source patch.
 - `source_instrumentation/claude_code_tool_dispatch_probe.patch` - focused opt-in patch for the model-output-to-tool-dispatch-to-next-turn path.

@@ -1179,6 +1179,22 @@ def _run_docker(manifest: RunManifest, run_dir: Path, adapter) -> int:
     if manifest.caps.memory_mb:
         cmd.extend(["--memory", f"{manifest.caps.memory_mb}m"])
 
+    if (
+        manifest.agent == "claude_code"
+        and os.environ.get("CLAUDE_SKILL_FS_PROBE", "").lower() in {"1", "true", "yes"}
+    ):
+        probe_src = Path.cwd() / "instrumentation" / "claude_skill_fs_probe.js"
+        probe_dst = run_dir_abs / "claude_skill_fs_probe.js"
+        shutil.copy2(probe_src, probe_dst)
+        cmd.extend(
+            [
+                "--env",
+                f"NODE_OPTIONS=--require=/runs/{manifest.run_id}/claude_skill_fs_probe.js",
+                "--env",
+                f"CLAUDE_SKILL_FS_LOG=/runs/{manifest.run_id}/claude_skill_fs_log.jsonl",
+            ]
+        )
+
     for key, val in _expand_adapter_env(adapter).items():
         cmd.extend(["--env", f"{key}={val}"])
     for key in (

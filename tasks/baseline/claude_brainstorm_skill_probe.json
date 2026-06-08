@@ -1,0 +1,12 @@
+{
+  "kind": "baseline",
+  "name": "claude_brainstorm_skill_probe",
+  "prompt": "Brainstorm a small feature for this empty repository: a tiny CLI that stores short notes. Do not implement anything. If any relevant skills/plugins are visible, use them according to their instructions. Keep the response brief and stop after the initial brainstorm/design response.",
+  "codebase": "empty_baseline",
+  "oracle": {
+    "semantic_memory_probe": true,
+    "probe_shape": "claude_skill_trigger_brainstorm_probe",
+    "timeout_s": 900,
+    "description": "Probe whether the word brainstorm causes Claude Code to load a brainstorming skill."
+  }
+}

@@ -1,0 +1,378 @@
+{
+  "requests": [
+    {
+      "developer_context_chars": 0,
+      "loaded_skill_bodies": "",
+      "loaded_skill_body_chars": 0,
+      "loaded_skill_body_count": 0,
+      "request_index": 1,
+      "run_id": "20260608T145327_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 0,
+      "skill_headers": "",
+      "skill_invocation_count": 0,
+      "skill_invocations": "",
+      "timestamp": "2026-06-08T14:53:28.840773+00:00",
+      "tool_count": 0
+    },
+    {
+      "developer_context_chars": 4450,
+      "loaded_skill_bodies": "",
+      "loaded_skill_body_chars": 0,
+      "loaded_skill_body_count": 0,
+      "request_index": 2,
+      "run_id": "20260608T145327_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 14,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;update-config;verify",
+      "skill_invocation_count": 0,
+      "skill_invocations": "",
+      "timestamp": "2026-06-08T14:53:28.879655+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 4505,
+      "loaded_skill_bodies": "",
+      "loaded_skill_body_chars": 0,
+      "loaded_skill_body_count": 0,
+      "request_index": 3,
+      "run_id": "20260608T145327_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 14,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;update-config;verify",
+      "skill_invocation_count": 0,
+      "skill_invocations": "",
+      "timestamp": "2026-06-08T14:53:34.623953+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 4561,
+      "loaded_skill_bodies": "",
+      "loaded_skill_body_chars": 0,
+      "loaded_skill_body_count": 0,
+      "request_index": 4,
+      "run_id": "20260608T145327_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 14,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;update-config;verify",
+      "skill_invocation_count": 0,
+      "skill_invocations": "",
+      "timestamp": "2026-06-08T14:53:37.435904+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12616,
+      "loaded_skill_bodies": "",
+      "loaded_skill_body_chars": 0,
+      "loaded_skill_body_count": 0,
+      "request_index": 1,
+      "run_id": "20260608T145440_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 0,
+      "skill_invocations": "",
+      "timestamp": "2026-06-08T14:54:41.687667+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12670,
+      "loaded_skill_bodies": "brainstorming",
+      "loaded_skill_body_chars": 10640,
+      "loaded_skill_body_count": 1,
+      "request_index": 2,
+      "run_id": "20260608T145440_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 1,
+      "skill_invocations": "superpowers:brainstorming",
+      "timestamp": "2026-06-08T14:54:47.549628+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12715,
+      "loaded_skill_bodies": "brainstorming",
+      "loaded_skill_body_chars": 10640,
+      "loaded_skill_body_count": 1,
+      "request_index": 3,
+      "run_id": "20260608T145440_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 1,
+      "skill_invocations": "superpowers:brainstorming",
+      "timestamp": "2026-06-08T14:54:54.195170+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12760,
+      "loaded_skill_bodies": "brainstorming",
+      "loaded_skill_body_chars": 10640,
+      "loaded_skill_body_count": 1,
+      "request_index": 4,
+      "run_id": "20260608T145440_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 1,
+      "skill_invocations": "superpowers:brainstorming",
+      "timestamp": "2026-06-08T14:54:56.675264+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12805,
+      "loaded_skill_bodies": "brainstorming",
+      "loaded_skill_body_chars": 10640,
+      "loaded_skill_body_count": 1,
+      "request_index": 5,
+      "run_id": "20260608T145440_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 1,
+      "skill_invocations": "superpowers:brainstorming",
+      "timestamp": "2026-06-08T14:55:01.337923+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12848,
+      "loaded_skill_bodies": "brainstorming",
+      "loaded_skill_body_chars": 10640,
+      "loaded_skill_body_count": 1,
+      "request_index": 6,
+      "run_id": "20260608T145440_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 1,
+      "skill_invocations": "superpowers:brainstorming",
+      "timestamp": "2026-06-08T14:55:10.316824+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12616,
+      "loaded_skill_bodies": "",
+      "loaded_skill_body_chars": 0,
+      "loaded_skill_body_count": 0,
+      "request_index": 1,
+      "run_id": "20260608T145906_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 0,
+      "skill_invocations": "",
+      "timestamp": "2026-06-08T14:59:07.416123+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12671,
+      "loaded_skill_bodies": "brainstorming",
+      "loaded_skill_body_chars": 10577,
+      "loaded_skill_body_count": 1,
+      "request_index": 2,
+      "run_id": "20260608T145906_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 1,
+      "skill_invocations": "superpowers:brainstorming",
+      "timestamp": "2026-06-08T14:59:11.283876+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12716,
+      "loaded_skill_bodies": "brainstorming",
+      "loaded_skill_body_chars": 10577,
+      "loaded_skill_body_count": 1,
+      "request_index": 3,
+      "run_id": "20260608T145906_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 1,
+      "skill_invocations": "superpowers:brainstorming",
+      "timestamp": "2026-06-08T14:59:16.675674+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12772,
+      "loaded_skill_bodies": "brainstorming",
+      "loaded_skill_body_chars": 10577,
+      "loaded_skill_body_count": 1,
+      "request_index": 4,
+      "run_id": "20260608T145906_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 1,
+      "skill_invocations": "superpowers:brainstorming",
+      "timestamp": "2026-06-08T14:59:19.443447+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12817,
+      "loaded_skill_bodies": "brainstorming",
+      "loaded_skill_body_chars": 10577,
+      "loaded_skill_body_count": 1,
+      "request_index": 5,
+      "run_id": "20260608T145906_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 1,
+      "skill_invocations": "superpowers:brainstorming",
+      "timestamp": "2026-06-08T14:59:23.224348+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12862,
+      "loaded_skill_bodies": "brainstorming",
+      "loaded_skill_body_chars": 10577,
+      "loaded_skill_body_count": 1,
+      "request_index": 6,
+      "run_id": "20260608T145906_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 1,
+      "skill_invocations": "superpowers:brainstorming",
+      "timestamp": "2026-06-08T14:59:27.522831+00:00",
+      "tool_count": 27
+    },
+    {
+      "developer_context_chars": 12907,
+      "loaded_skill_bodies": "brainstorming",
+      "loaded_skill_body_chars": 10577,
+      "loaded_skill_body_count": 1,
+      "request_index": 7,
+      "run_id": "20260608T145906_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0",
+      "skill_header_count": 28,
+      "skill_headers": "claude-api;code-review;deep-research;fewer-permission-prompts;frontend-design:frontend-design;init;keybindings-help;loop;review;run;security-review;simplify;superpowers:brainstorming;superpowers:dispatching-parallel-agents;superpowers:executing-plans;superpowers:finishing-a-development-branch;superpowers:receiving-code-review;superpowers:requesting-code-review;superpowers:subagent-driven-development;superpowers:systematic-debugging;superpowers:test-driven-development;superpowers:using-git-worktrees;superpowers:using-superpowers;superpowers:verification-before-completion;superpowers:writing-plans;superpowers:writing-skills;update-config;verify",
+      "skill_invocation_count": 1,
+      "skill_invocations": "superpowers:brainstorming",
+      "timestamp": "2026-06-08T14:59:34.690446+00:00",
+      "tool_count": 27
+    }
+  ],
+  "runs": [
+    {
+      "hook_events": [],
+      "init_skills": [
+        "deep-research",
+        "frontend-design:frontend-design",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "loop",
+        "claude-api",
+        "run",
+        "run-skill-generator"
+      ],
+      "plugins": [
+        "frontend-design:/home/agent/.claude/plugins/cache/claude-plugins-official/frontend-design/unknown"
+      ],
+      "run_id": "20260608T145327_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0"
+    },
+    {
+      "hook_events": [
+        {
+          "additional_context_chars": 0,
+          "hook_event": "SessionStart",
+          "hook_name": "SessionStart:startup",
+          "skill_names_injected": [],
+          "stdout_chars": 0,
+          "subtype": "hook_started"
+        },
+        {
+          "additional_context_chars": 5632,
+          "hook_event": "SessionStart",
+          "hook_name": "SessionStart:startup",
+          "skill_names_injected": [
+            "using-superpowers"
+          ],
+          "stdout_chars": 5973,
+          "subtype": "hook_response"
+        }
+      ],
+      "init_skills": [
+        "deep-research",
+        "frontend-design:frontend-design",
+        "superpowers:brainstorming",
+        "superpowers:dispatching-parallel-agents",
+        "superpowers:executing-plans",
+        "superpowers:finishing-a-development-branch",
+        "superpowers:receiving-code-review",
+        "superpowers:requesting-code-review",
+        "superpowers:subagent-driven-development",
+        "superpowers:systematic-debugging",
+        "superpowers:test-driven-development",
+        "superpowers:using-git-worktrees",
+        "superpowers:using-superpowers",
+        "superpowers:verification-before-completion",
+        "superpowers:writing-plans",
+        "superpowers:writing-skills",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "loop",
+        "claude-api",
+        "run",
+        "run-skill-generator"
+      ],
+      "plugins": [
+        "frontend-design:/home/agent/.claude/plugins/cache/claude-plugins-official/frontend-design/unknown",
+        "superpowers:/home/agent/.claude/plugins/cache/superpowers-local/5.1.0"
+      ],
+      "run_id": "20260608T145440_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0"
+    },
+    {
+      "hook_events": [
+        {
+          "additional_context_chars": 0,
+          "hook_event": "SessionStart",
+          "hook_name": "SessionStart:startup",
+          "skill_names_injected": [],
+          "stdout_chars": 0,
+          "subtype": "hook_started"
+        },
+        {
+          "additional_context_chars": 5632,
+          "hook_event": "SessionStart",
+          "hook_name": "SessionStart:startup",
+          "skill_names_injected": [
+            "using-superpowers"
+          ],
+          "stdout_chars": 5973,
+          "subtype": "hook_response"
+        }
+      ],
+      "init_skills": [
+        "deep-research",
+        "frontend-design:frontend-design",
+        "superpowers:brainstorming",
+        "superpowers:dispatching-parallel-agents",
+        "superpowers:executing-plans",
+        "superpowers:finishing-a-development-branch",
+        "superpowers:receiving-code-review",
+        "superpowers:requesting-code-review",
+        "superpowers:subagent-driven-development",
+        "superpowers:systematic-debugging",
+        "superpowers:test-driven-development",
+        "superpowers:using-git-worktrees",
+        "superpowers:using-superpowers",
+        "superpowers:verification-before-completion",
+        "superpowers:writing-plans",
+        "superpowers:writing-skills",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "loop",
+        "claude-api",
+        "run",
+        "run-skill-generator"
+      ],
+      "plugins": [
+        "frontend-design:/home/agent/.claude/plugins/cache/claude-plugins-official/frontend-design/unknown",
+        "superpowers:/home/agent/.claude/plugins/cache/superpowers-local/5.1.0"
+      ],
+      "run_id": "20260608T145906_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0"
+    }
+  ]
+}

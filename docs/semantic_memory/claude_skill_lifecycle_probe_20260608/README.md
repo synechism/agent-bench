@@ -48,6 +48,43 @@ No hook events were observed before session init.
 | `20260608T145906_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0` | 6 | 28 | superpowers:brainstorming | brainstorming | 10,577 |
 | `20260608T145906_claude_code_empty_baseline_claude_brainstorm_skill_probe_nocap_rep0` | 7 | 28 | superpowers:brainstorming | brainstorming | 10,577 |
 
+## What Superpowers Adds
+
+Adding Superpowers does **not** cause Claude Code to load every Superpowers skill body into the first request. The observed layering is:
+
+1. **Plugin discovery:** `--plugin-dir .../superpowers` makes Claude Code discover the plugin. The session `init` event then lists Superpowers skills as available user-invocable skills.
+2. **Skill inventory/header load:** the model request gets names and descriptions for available skills. In this probe, visible skill headers rose from 14 without Superpowers to 28 with Superpowers. These are metadata entries, not full `SKILL.md` bodies.
+3. **Startup hook injection:** Superpowers registers a `SessionStart` hook in `hooks/hooks.json`. That hook injects the full `using-superpowers` skill into the session before the first model request. In our run, the hook injected 5,632 chars of additional context. This is the main unconditional Superpowers startup cost.
+4. **Model chooses a matching skill:** the first model request contains the user prompt, the skill inventory, and the injected `using-superpowers` instructions. The prompt says `Brainstorm...`, the inventory contains `superpowers:brainstorming`, and `using-superpowers` says relevant skills must be invoked before any response. The model then emits a `Skill` tool call for `superpowers:brainstorming`.
+5. **Skill tool loads the full body:** after the `Skill` tool call, Claude Code returns a synthetic user/tool-result message containing the full `brainstorming` skill body. In this probe that body was about 10.6k chars, and it remained in context in every later request.
+
+So the causal path we can support from instrumentation is:
+
+```text
+plugin directory exposed
+  -> Claude Code advertises Superpowers skill headers
+  -> SessionStart hook injects using-superpowers
+  -> model semantically selects superpowers:brainstorming
+  -> Skill tool resolves and inserts the full brainstorming skill body
+  -> later stateless API requests resend that body as conversation history
+```
+
+This looks different from a hard-coded source-code trigger like "if prompt contains the word brainstorm, load the brainstorming file." The observed trigger is model-mediated: Claude Code exposes metadata and the `Skill` tool; the Superpowers hook strongly instructs the model to invoke relevant skills; the model chooses `superpowers:brainstorming`; the tool implementation then loads the body.
+
+`superpowers:writing-plans`, `superpowers:executing-plans`, and related workflow skills were advertised as headers only. They were not loaded as full bodies in this one-shot probe. The `brainstorming` skill itself says the next terminal state is `writing-plans`, but only after a design/spec approval gate; our prompt explicitly stopped after the initial brainstorm/design response, so that transition did not happen.
+
+## Context Cost
+
+The context overhead in this probe breaks down into three visible buckets:
+
+| layer | without Superpowers | with Superpowers | interpretation |
+| --- | ---: | ---: | --- |
+| Skill headers | 14 headers | 28 headers | Superpowers adds 14 advertised skills as names/descriptions. |
+| Startup hook | 0 hook chars | 5,632 additional-context chars | Full `using-superpowers` skill is injected at session start. |
+| Loaded skill body | 0 chars | about 10.6k chars after request 1 | Full `brainstorming` body appears only after the model invokes `Skill`. |
+
+The important finding is that Superpowers has a real startup context cost, but it is not "all full skills every turn." It is full `using-superpowers` plus skill metadata at startup, then full bodies only for skills that are actually invoked.
+
 ## Interpretation
 
 - Without Superpowers, the prompt used the word `brainstorm`, but no `brainstorming` skill was advertised or invoked.

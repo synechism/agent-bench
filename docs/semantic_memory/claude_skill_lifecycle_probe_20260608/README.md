@@ -130,6 +130,204 @@ Concrete code sites:
 | `src/tools/SkillTool/SkillTool.ts` | Validates and dispatches model `Skill(...)` calls. |
 | `src/utils/processUserInput/processSlashCommand.tsx` | Expands the selected skill into full prompt text and registers it as invoked. |
 
+## Full Causal Mechanism
+
+The stronger source-backed answer is that Claude Code has two different registries:
+
+1. **Tool registry:** TypeScript `Tool` objects such as `SkillTool`, `BashTool`, `Read`, and `Edit`. `src/tools.ts` imports `SkillTool` and includes it in `getAllBaseTools()`, so the model can emit a `tool_use` block named `Skill`.
+2. **Skill/command registry:** prompt-command objects built from bundled skills, `.claude/skills/*/SKILL.md`, plugins, and MCP skills. Plugin skills are read by `src/utils/plugins/loadPluginCommands.ts`; local skill directories are read by `src/skills/loadSkillsDir.ts`; both become `Command` objects with metadata plus an async `getPromptForCommand()` function that expands the full body only on invocation.
+
+The important separation is: the model sees the **Skill tool schema** and a **skill listing**, not every full skill body. The body is loaded only after a model-emitted `Skill` call names a specific skill.
+
+### 1. Tool Availability
+
+`src/tools.ts` is the built-in tool source of truth:
+
+```ts
+export function getAllBaseTools(): Tools {
+  return [
+    AgentTool,
+    TaskOutputTool,
+    BashTool,
+    ...
+    AskUserQuestionTool,
+    SkillTool,
+    EnterPlanModeTool,
+    ...
+  ]
+}
+```
+
+`src/services/api/claude.ts` serializes the current `tools` array into API schemas on each model request:
+
+```ts
+const toolSchemas = await Promise.all(
+  filteredTools.map(tool => toolToAPISchema(tool, ...)),
+)
+const allTools = [...toolSchemas, ...extraToolSchemas]
+...
+return {
+  messages: addCacheBreakpoints(messagesForAPI, ...),
+  system,
+  tools: allTools,
+  tool_choice: options.toolChoice,
+  ...
+}
+```
+
+`src/utils/api.ts` shows what a normal tool schema contains: `name`, `description`, and `input_schema`, with a session-scoped schema cache to avoid recomputing unstable descriptions locally. This does not mean the model has hidden persistent state; it means the client rebuilds and sends request parameters, with provider-side prompt caching possible for repeated prefixes.
+
+### 2. Skill Metadata Loading
+
+Plugin skills are loaded by scanning enabled plugins, reading `SKILL.md`, parsing frontmatter, and constructing prompt commands:
+
+```text
+getPluginSkills()
+  -> loadAllPluginsCacheOnly()
+  -> loadSkillsFromDirectory()
+  -> parseFrontmatter(SKILL.md)
+  -> createPluginCommand()
+```
+
+The resulting command stores the metadata (`description`, `whenToUse`, `allowedTools`, `model`, etc.) and a lazy body expander:
+
+```ts
+async getPromptForCommand(args, context) {
+  let finalContent = config.isSkillMode
+    ? `Base directory for this skill: ${dirname(file.filePath)}\n\n${content}`
+    : content
+  ...
+  return [{ type: 'text', text: finalContent }]
+}
+```
+
+That is the code-level answer to “where are skills stored?” Before invocation, they are local `Command` objects in memoized command registries (`loadAllCommands`, `getCommands`, `getSkillToolCommands`). Their full markdown is held client-side as command content/closures, not automatically inserted into the model prompt.
+
+### 3. Skill Listing Injection
+
+`src/utils/attachments.ts` decides whether to announce skill headers:
+
+```text
+getSkillListingAttachments()
+  -> getSkillToolCommands(cwd)
+  -> filter out skills already sent for this agent
+  -> formatCommandsWithinBudget(newSkills, contextWindowTokens)
+  -> attachment type: skill_listing
+```
+
+`src/utils/messages.ts` turns that attachment into a model-visible system-reminder user message:
+
+```text
+The following skills are available for use with the Skill tool:
+
+- superpowers:brainstorming: ...
+- superpowers:writing-plans: ...
+```
+
+This is why Superpowers increases visible skill headers at startup but does not load every Superpowers skill body.
+
+### 4. The Actual Trigger
+
+The actual trigger for `superpowers:brainstorming` is a model output, not a hard-coded string match. In the successful Superpowers run, the assistant explicitly reasoned that the available `superpowers:brainstorming` skill matched the user request and emitted:
+
+```json
+{"id":"call_00_ccgM9cHbJHMkwPKLWvbT4106","input":{"args":"Brainstorm a small feature for this empty repository: a tiny CLI that stores short notes. Keep it brief and stop after brainstorming/design — no implementation.","skill":"superpowers:brainstorming"},"name":"Skill"}
+```
+
+The full excerpt is saved at `model_output_evidence/brainstorm_skill_tool_use_request1.md`.
+
+So the word `brainstorm` matters semantically because it helps the model choose the advertised brainstorming skill. It is not the direct loader. The direct loader event is the assistant `tool_use` block named `Skill` with `input.skill = "superpowers:brainstorming"`.
+
+### 5. Tool Dispatch
+
+`src/query.ts` captures streamed assistant `tool_use` blocks:
+
+```ts
+const msgToolUseBlocks = message.message.content.filter(
+  content => content.type === 'tool_use',
+) as ToolUseBlock[]
+toolUseBlocks.push(...msgToolUseBlocks)
+```
+
+After the assistant response, `query.ts` sends those blocks through `runTools(...)`:
+
+```ts
+const toolUpdates = runTools(
+  toolUseBlocks,
+  assistantMessages,
+  canUseTool,
+  toolUseContext,
+)
+```
+
+`src/services/tools/toolOrchestration.ts` partitions tool calls and executes them serially or concurrently. `src/services/tools/toolExecution.ts` resolves the model-provided name back to the local tool object:
+
+```ts
+const toolName = toolUse.name
+let tool = findToolByName(toolUseContext.options.tools, toolName)
+...
+const result = await tool.call(callInput, context, canUseTool, assistantMessage, ...)
+```
+
+For `name = "Skill"`, this invokes `SkillTool.call()`.
+
+### 6. Body Expansion And Storage
+
+Inside `src/tools/SkillTool/SkillTool.ts`, `SkillTool.call()` resolves the requested command and calls `processPromptSlashCommand(...)`. That path reaches `getMessagesForPromptSlashCommand()` in `src/utils/processUserInput/processSlashCommand.tsx`, which does the critical expansion:
+
+```ts
+const result = await command.getPromptForCommand(args, context)
+...
+addInvokedSkill(command.name, skillPath, skillContent, agentId)
+```
+
+`SkillTool.call()` returns those expanded messages as `newMessages`. `src/services/tools/toolExecution.ts` then appends `result.newMessages` to the tool-result stream, and `src/query.ts` appends all tool results into the next turn state:
+
+```ts
+messages: [...messagesForQuery, ...assistantMessages, ...toolResults]
+```
+
+That is how the loaded skill body enters the next model request: it becomes a synthetic user/meta message in conversation history. It is not “stored inside the model”; it is stored in the client transcript and resent on subsequent stateless API calls until compaction or pruning changes the transcript.
+
+### 7. Compaction Preservation
+
+`addInvokedSkill()` stores invoked bodies in process state:
+
+```ts
+STATE.invokedSkills.set(`${agentId ?? ''}:${skillName}`, {
+  skillName,
+  skillPath,
+  content,
+  invokedAt: Date.now(),
+  agentId,
+})
+```
+
+When compaction runs, `src/services/compact/compact.ts` creates an `invoked_skills` attachment from this state. `src/utils/messages.ts` renders that attachment as:
+
+```text
+The following skills were invoked in this session. Continue to follow these guidelines:
+
+### Skill: ...
+```
+
+So invoked skill bodies have two persistence paths: normal conversation history before compaction, and the `invoked_skills` attachment after compaction.
+
+### Dispatch Probe Patch
+
+I added a second focused source patch at `source_instrumentation/claude_code_tool_dispatch_probe.patch`. It logs the missing middle of the lifecycle when `CLAUDE_CODE_SKILL_LIFECYCLE_LOG` is set:
+
+- `model_tool_use_blocks_captured`: `query.ts` saw a model-emitted tool call.
+- `tool_execution_loop_start`: `query.ts` is about to run tool calls.
+- `run_tools_orchestration_start` / `run_tools_orchestration_batch`: `runTools()` partitioned the calls.
+- `tool_dispatch_lookup`: `toolExecution.ts` resolved the model tool name to a local `Tool` object.
+- `tool_call_enter`: the local `Tool.call()` is about to execute.
+- `tool_call_returned`: `Tool.call()` returned, including whether it produced `newMessages`.
+- `tool_new_messages_enqueued`: expanded skill body messages are being queued into the tool-result stream.
+- `tool_results_appended_to_next_turn_state`: `query.ts` appended assistant messages and tool results into the next request state.
+
+After adding this patch, the source CLI startup path still runs with `bun run src/entrypoints/cli.tsx --version`. A targeted `bun build` of the touched query/tool files still fails on the same unrelated source-package dependency gaps noted below (`protectedNamespace.js`, `sharp`, Bedrock/Vertex SDK packages, etc.), so the dispatch patch is saved for the next source-backed end-to-end run rather than claimed as a fully built artifact.
+
 The instrumented source confirmed the architecture strongly:
 
 - At startup, Claude Code reads each installed plugin skill's `SKILL.md` to parse frontmatter and metadata. In our local setup this found `frontend-design:frontend-design` plus 14 `superpowers:*` skills.
@@ -161,7 +359,9 @@ Validation notes:
 - `context_dumps/01_session_start_hook_using_superpowers.md` - exact `SessionStart` hook additional context injected by Superpowers.
 - `context_dumps/02_initial_skill_inventory_request1.md` - exact request-1 developer/skills inventory after Superpowers is exposed.
 - `context_dumps/03_loaded_brainstorming_skill_tool_result.md` - exact synthetic user/tool-result text loaded after `Skill(superpowers:brainstorming)`.
+- `model_output_evidence/brainstorm_skill_tool_use_request1.md` - exact assistant `tool_use` evidence that triggered the skill load.
 - `source_instrumentation/claude_code_skill_lifecycle_probe.patch` - opt-in source patch.
+- `source_instrumentation/claude_code_tool_dispatch_probe.patch` - focused opt-in patch for the model-output-to-tool-dispatch-to-next-turn path.
 - `source_instrumentation/source_cli_startup_probe.jsonl` - source CLI startup evidence for plugin frontmatter and `SessionStart` hook injection.
 - `source_instrumentation/direct_skill_listing_probe.jsonl` - direct source evidence for skill-listing formatting.
 - `source_instrumentation/direct_skill_body_probe.jsonl` - direct source evidence for full `superpowers:brainstorming` body loading.

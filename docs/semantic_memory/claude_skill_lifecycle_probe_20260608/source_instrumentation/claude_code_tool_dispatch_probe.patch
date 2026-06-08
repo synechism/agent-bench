@@ -1,0 +1,220 @@
+diff --git a/src/query.ts b/src/query.ts
+index 07e8b6f..b360008 100644
+--- a/src/query.ts
++++ b/src/query.ts
+@@ -43,6 +43,7 @@ import {
+   isPromptTooLongMessage,
+ } from './services/api/errors.js'
+ import { logAntError, logForDebugging } from './utils/debug.js'
++import { logSkillLifecycle } from './utils/skillLifecycleProbe.js'
+ import {
+   createUserMessage,
+   createUserInterruptionMessage,
+@@ -830,6 +831,23 @@ async function* queryLoop(
+                 content => content.type === 'tool_use',
+               ) as ToolUseBlock[]
+               if (msgToolUseBlocks.length > 0) {
++                logSkillLifecycle('model_tool_use_blocks_captured', {
++                  count: msgToolUseBlocks.length,
++                  tools: msgToolUseBlocks.map(block => block.name),
++                  skillNames: msgToolUseBlocks
++                    .map(block =>
++                      block.name === 'Skill' &&
++                      block.input &&
++                      typeof block.input === 'object' &&
++                      'skill' in block.input &&
++                      typeof block.input.skill === 'string'
++                        ? block.input.skill
++                        : null,
++                    )
++                    .filter(Boolean),
++                  queryChainId: queryTracking.chainId,
++                  queryDepth: queryTracking.depth,
++                })
+                 toolUseBlocks.push(...msgToolUseBlocks)
+                 needsFollowUp = true
+               }
+@@ -1380,6 +1398,24 @@ async function* queryLoop(
+     const toolUpdates = streamingToolExecutor
+       ? streamingToolExecutor.getRemainingResults()
+       : runTools(toolUseBlocks, assistantMessages, canUseTool, toolUseContext)
++    logSkillLifecycle('tool_execution_loop_start', {
++      toolUseBlockCount: toolUseBlocks.length,
++      tools: toolUseBlocks.map(block => block.name),
++      skillNames: toolUseBlocks
++        .map(block =>
++          block.name === 'Skill' &&
++          block.input &&
++          typeof block.input === 'object' &&
++          'skill' in block.input &&
++          typeof block.input.skill === 'string'
++            ? block.input.skill
++            : null,
++        )
++        .filter(Boolean),
++      streamingExecutor: Boolean(streamingToolExecutor),
++      queryChainId: queryTracking.chainId,
++      queryDepth: queryTracking.depth,
++    })
+ 
+     for await (const update of toolUpdates) {
+       if (update.message) {
+@@ -1674,6 +1710,15 @@ async function* queryLoop(
+       ...updatedToolUseContext,
+       queryTracking,
+     }
++    logSkillLifecycle('tool_results_appended_to_next_turn_state', {
++      assistantMessageCount: assistantMessages.length,
++      toolResultMessageCount: toolResults.length,
++      totalNextMessages:
++        messagesForQuery.length + assistantMessages.length + toolResults.length,
++      toolUseBlockCount: toolUseBlocks.length,
++      queryChainId: queryTracking.chainId,
++      queryDepth: queryTracking.depth,
++    })
+ 
+     // Each time we have tool results and are about to recurse, that's a turn
+     const nextTurnCount = turnCount + 1
+diff --git a/src/services/tools/toolExecution.ts b/src/services/tools/toolExecution.ts
+index 40ef38e..782cc43 100644
+--- a/src/services/tools/toolExecution.ts
++++ b/src/services/tools/toolExecution.ts
+@@ -87,6 +87,7 @@ import {
+ } from '../../utils/sessionActivity.js'
+ import { jsonStringify } from '../../utils/slowOperations.js'
+ import { Stream } from '../../utils/stream.js'
++import { logSkillLifecycle } from '../../utils/skillLifecycleProbe.js'
+ import { logOTelEvent } from '../../utils/telemetry/events.js'
+ import {
+   addToolContentEvent,
+@@ -343,6 +344,14 @@ export async function* runToolUse(
+   const toolName = toolUse.name
+   // First try to find in the available tools (what the model sees)
+   let tool = findToolByName(toolUseContext.options.tools, toolName)
++  const modelRequestedSkill =
++    toolName === 'Skill' &&
++    toolUse.input &&
++    typeof toolUse.input === 'object' &&
++    'skill' in toolUse.input &&
++    typeof toolUse.input.skill === 'string'
++      ? toolUse.input.skill
++      : null
+ 
+   // If not found, check if it's a deprecated tool being called by alias
+   // (e.g., old transcripts calling "KillShell" which is now an alias for "TaskStop")
+@@ -364,6 +373,14 @@ export async function* runToolUse(
+     toolName,
+     toolUseContext.options.mcpClients,
+   )
++  logSkillLifecycle('tool_dispatch_lookup', {
++    toolName,
++    toolUseID: toolUse.id,
++    found: Boolean(tool),
++    modelRequestedSkill,
++    availableToolCount: toolUseContext.options.tools.length,
++    agentId: toolUseContext.agentId ?? null,
++  })
+ 
+   // Check if the tool exists
+   if (!tool) {
+@@ -1204,6 +1221,19 @@ async function checkPermissionsAndCallTool(
+     callInput = processedInput
+   }
+   try {
++    logSkillLifecycle('tool_call_enter', {
++      toolName: tool.name,
++      toolUseID,
++      modelRequestedSkill:
++        tool.name === 'Skill' &&
++        callInput &&
++        typeof callInput === 'object' &&
++        'skill' in callInput &&
++        typeof callInput.skill === 'string'
++          ? callInput.skill
++          : null,
++      agentId: toolUseContext.agentId ?? null,
++    })
+     const result = await tool.call(
+       callInput,
+       {
+@@ -1220,6 +1250,18 @@ async function checkPermissionsAndCallTool(
+         })
+       },
+     )
++    logSkillLifecycle('tool_call_returned', {
++      toolName: tool.name,
++      toolUseID,
++      hasNewMessages: Boolean(result.newMessages?.length),
++      newMessagesCount: result.newMessages?.length ?? 0,
++      hasContextModifier: Boolean(result.contextModifier),
++      resultDataKeys:
++        result.data && typeof result.data === 'object'
++          ? Object.keys(result.data)
++          : [],
++      agentId: toolUseContext.agentId ?? null,
++    })
+     const durationMs = Date.now() - startTime
+     addToToolDuration(durationMs)
+ 
+@@ -1564,6 +1606,13 @@ async function checkPermissionsAndCallTool(
+ 
+     // If the tool provided new messages, add them to the list to return.
+     if (result.newMessages && result.newMessages.length > 0) {
++      logSkillLifecycle('tool_new_messages_enqueued', {
++        toolName: tool.name,
++        toolUseID,
++        newMessagesCount: result.newMessages.length,
++        messageTypes: result.newMessages.map(message => message.type),
++        agentId: toolUseContext.agentId ?? null,
++      })
+       for (const message of result.newMessages) {
+         resultingMessages.push({ message })
+       }
+diff --git a/src/services/tools/toolOrchestration.ts b/src/services/tools/toolOrchestration.ts
+index 95e02cb..ea77ee0 100644
+--- a/src/services/tools/toolOrchestration.ts
++++ b/src/services/tools/toolOrchestration.ts
+@@ -3,6 +3,7 @@ import type { CanUseToolFn } from '../../hooks/useCanUseTool.js'
+ import { findToolByName, type ToolUseContext } from '../../Tool.js'
+ import type { AssistantMessage, Message } from '../../types/message.js'
+ import { all } from '../../utils/generators.js'
++import { logSkillLifecycle } from '../../utils/skillLifecycleProbe.js'
+ import { type MessageUpdateLazy, runToolUse } from './toolExecution.js'
+ 
+ function getMaxToolUseConcurrency(): number {
+@@ -23,10 +24,31 @@ export async function* runTools(
+   toolUseContext: ToolUseContext,
+ ): AsyncGenerator<MessageUpdate, void> {
+   let currentContext = toolUseContext
+-  for (const { isConcurrencySafe, blocks } of partitionToolCalls(
+-    toolUseMessages,
+-    currentContext,
+-  )) {
++  const batches = partitionToolCalls(toolUseMessages, currentContext)
++  logSkillLifecycle('run_tools_orchestration_start', {
++    toolUseCount: toolUseMessages.length,
++    batchCount: batches.length,
++    tools: toolUseMessages.map(block => block.name),
++    agentId: toolUseContext.agentId ?? null,
++  })
++  for (const { isConcurrencySafe, blocks } of batches) {
++    logSkillLifecycle('run_tools_orchestration_batch', {
++      isConcurrencySafe,
++      blockCount: blocks.length,
++      tools: blocks.map(block => block.name),
++      skillNames: blocks
++        .map(block =>
++          block.name === 'Skill' &&
++          block.input &&
++          typeof block.input === 'object' &&
++          'skill' in block.input &&
++          typeof block.input.skill === 'string'
++            ? block.input.skill
++            : null,
++        )
++        .filter(Boolean),
++      agentId: currentContext.agentId ?? null,
++    })
+     if (isConcurrencySafe) {
+       const queuedContextModifiers: Record<
+         string,

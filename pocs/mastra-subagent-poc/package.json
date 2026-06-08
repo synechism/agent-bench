@@ -1,0 +1,21 @@
+{
+  "name": "mastra-subagent-poc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "dev": "mastra dev",
+    "poc": "tsx src/poc.ts"
+  },
+  "dependencies": {
+    "@mastra/core": "latest",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "mastra": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}

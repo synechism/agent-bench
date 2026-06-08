@@ -1,0 +1,12 @@
+{
+  "kind": "baseline",
+  "name": "claude_subagent_superpowers_probe",
+  "prompt": "Run a quick controlled probe. Use the Agent tool exactly once with subagent_type general-purpose. The subagent task is: \"Do not edit files. Briefly answer whether your initial context appears to include Superpowers/plugin skill instructions or Superpowers skill headers. If you are instructed by context to invoke a skill before answering, follow that instruction first, then answer briefly.\" After the Agent tool returns, summarize the subagent's answer in one sentence and stop.",
+  "codebase": "empty_baseline",
+  "oracle": {
+    "semantic_memory_probe": true,
+    "probe_shape": "claude_subagent_superpowers_probe",
+    "timeout_s": 900,
+    "description": "Probe whether Superpowers hook/skill context appears in Claude Code subagent requests."
+  }
+}

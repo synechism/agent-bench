@@ -1,0 +1,12 @@
+{
+  "kind": "baseline",
+  "name": "claude_subagent_superpowers_brainstorm_probe",
+  "prompt": "Run a quick controlled probe. Use the Agent tool exactly once with subagent_type general-purpose. The subagent task is: \"Do not edit files. Brainstorm a tiny CLI feature for this empty repository. If any visible skill instructions say to use a skill before brainstorming, follow them first. Keep the answer brief.\" After the Agent tool returns, summarize whether the subagent used a Superpowers skill in one sentence and stop.",
+  "codebase": "empty_baseline",
+  "oracle": {
+    "semantic_memory_probe": true,
+    "probe_shape": "claude_subagent_superpowers_brainstorm_probe",
+    "timeout_s": 900,
+    "description": "Probe whether Superpowers skill headers inside a Claude Code subagent trigger brainstorming skill use."
+  }
+}

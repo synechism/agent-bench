@@ -1,0 +1,6 @@
+{
+  "id": "demo-session-start",
+  "event": "SessionStart",
+  "appliesTo": "parent",
+  "additionalContext": "Demo SessionStart hook: parent sessions may receive startup guidance before the first model request."
+}

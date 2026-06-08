@@ -1,0 +1,64 @@
+{
+  "explanation": "Fresh subagent receives only its specialist system prompt and parent-written brief. Fork subagent receives parent rendered system prompt, parent messages, parent tools, and a fork directive.",
+  "fresh": {
+    "agentId": "research-agent-001",
+    "agentType": "research-agent",
+    "mode": "fresh",
+    "systemPrompt": "You are a fresh research subagent loaded from the filesystem agent registry.\n\nYou receive only the prompt supplied by the parent plus your own instructions.\nDo not assume you have seen the parent conversation. Report concise findings.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Research the Claude Code AgentTool path. Include files to inspect and a concise explanation. Context: we care about subagent context construction."
+      }
+    ],
+    "toolNames": [
+      "inspect-repo",
+      "summarize-context"
+    ],
+    "skillNames": [
+      "superpowers:brainstorming",
+      "superpowers:systematic-debugging"
+    ],
+    "hookIds": [
+      "demo-subagent-start"
+    ],
+    "developerContext": "The following skills are available for use with the Skill tool:\n\n- superpowers:brainstorming: Use before creative feature or product design work to clarify intent before implementation.\n- superpowers:systematic-debugging: Use when investigating a bug, failing test, or unexpected behavior before proposing fixes.",
+    "hookContext": "Demo SubagentStart hook: this worker is scoped. Use only the supplied brief and return compact findings.",
+    "result": "agentId=research-agent-001\nmode=fresh\nagentType=research-agent\nmessageCount=1\ntoolNames=inspect-repo,summarize-context\nskillNames=superpowers:brainstorming,superpowers:systematic-debugging\nhookIds=demo-subagent-start\ndeveloperContextChars=312\nhookContextChars=104\nparentContextVisible=false\ncontextSummary={\"summary\":\"Visible layers: systemPrompt, messages, tools, skillRegistry, readFileState, hookContext, parentBriefOnly\"}\ninventory={\"files\":[\"src/tools/AgentTool/AgentTool.tsx\",\"src/tools/AgentTool/runAgent.ts\",\"src/tools/AgentTool/forkSubagent.ts\"],\"note\":\"Inventory generated for subagents.\"}"
+  },
+  "fork": {
+    "agentId": "fork-002",
+    "agentType": "fork",
+    "mode": "fork",
+    "systemPrompt": "You are the parent coordinator.\nYou have read the Claude Code subagent source and should keep raw worker output out of your own context.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Investigate how Claude Code injects context into subagents and prepare a Mastra POC."
+      },
+      {
+        "role": "assistant",
+        "content": "I found AgentTool.tsx, runAgent.ts, and forkSubagent.ts. Fresh agents get prompts; forks inherit parent messages."
+      },
+      {
+        "role": "user",
+        "name": "fork-directive",
+        "content": "<fork_boilerplate>\nSTOP. READ THIS FIRST.\n\nYou are a forked worker process. You are NOT the main agent.\nUse the inherited context above, execute the directive directly, and return only scoped facts.\n</fork_boilerplate>\n\n<fork_directive>Using the inherited parent context, verify whether fresh subagents inherit the full parent conversation.</fork_directive>"
+      }
+    ],
+    "toolNames": [
+      "inspect-repo",
+      "summarize-context"
+    ],
+    "skillNames": [
+      "superpowers:brainstorming",
+      "superpowers:systematic-debugging"
+    ],
+    "hookIds": [
+      "demo-subagent-start"
+    ],
+    "developerContext": "The following skills are available for use with the Skill tool:\n\n- superpowers:brainstorming: Use before creative feature or product design work to clarify intent before implementation.\n- superpowers:systematic-debugging: Use when investigating a bug, failing test, or unexpected behavior before proposing fixes.",
+    "hookContext": "Demo SubagentStart hook: this worker is scoped. Use only the supplied brief and return compact findings.",
+    "result": "agentId=fork-002\nmode=fork\nagentType=fork\nmessageCount=3\ntoolNames=inspect-repo,summarize-context\nskillNames=superpowers:brainstorming,superpowers:systematic-debugging\nhookIds=demo-subagent-start\ndeveloperContextChars=312\nhookContextChars=104\nparentContextVisible=true\ncontextSummary={\"summary\":\"Visible layers: systemPrompt, messages, tools, skillRegistry, readFileState, hookContext, parentConversation\"}\ninventory={\"files\":[\"src/tools/AgentTool/AgentTool.tsx\",\"src/tools/AgentTool/runAgent.ts\",\"src/tools/AgentTool/forkSubagent.ts\"],\"note\":\"Inventory generated for subagents.\"}"
+  }
+}

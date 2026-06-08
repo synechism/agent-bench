@@ -1,0 +1,6 @@
+{
+  "id": "demo-subagent-start",
+  "event": "SubagentStart",
+  "appliesTo": "subagent",
+  "additionalContext": "Demo SubagentStart hook: this worker is scoped. Use only the supplied brief and return compact findings."
+}

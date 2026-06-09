@@ -99,3 +99,21 @@ export OPENAI_API_KEY=...
 export MASTRA_MODEL=openai/gpt-5-nano
 npm run dev
 ```
+
+For a real non-deterministic subagent delegation run, use the local ignored
+`.env` file and run:
+
+```bash
+npm run poc:real
+```
+
+This repo's `.env` is seeded from the existing Codex Azure OpenAI environment:
+
+```text
+MASTRA_MODEL=openai/gpt-5.5
+OPENAI_BASE_URL=https://cronwell-codex-2.openai.azure.com/openai/v1
+OPENAI_API_KEY=<from AZURE_API_KEY>
+```
+
+The script calls the real Mastra supervisor, delegates to `research-agent`, and
+uses `claudeFreshDelegation` so the child receives zero parent history messages.

@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc --noEmit",
     "dev": "mastra dev",
-    "poc": "tsx src/poc.ts"
+    "poc": "tsx src/poc.ts",
+    "poc:real": "tsx src/real-poc.ts"
   },
   "dependencies": {
     "@mastra/core": "latest",

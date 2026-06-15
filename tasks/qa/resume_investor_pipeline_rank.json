@@ -1,0 +1,13 @@
+{
+  "kind": "qa",
+  "name": "resume_investor_pipeline_rank",
+  "prompt": "Read all 24 PDF resumes in `24-resumes/` and rank the strongest candidate for a role helping build investor pipelines. You may use whatever command-line tools or packages you think are appropriate to inspect the PDFs. Be explicit about your process: which resume files you inspected, how you extracted or read them, the criteria you used, and the final ranking rationale. Do not skip any resume. End with a concise strongest-candidate recommendation.",
+  "codebase": "resume_ranking_24",
+  "oracle": {
+    "semantic_memory_probe": true,
+    "probe_shape": "resume_ranking_24",
+    "resume_dir": "24-resumes",
+    "expected_resume_count": 24,
+    "timeout_s": 2400
+  }
+}

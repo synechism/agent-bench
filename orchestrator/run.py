@@ -219,6 +219,11 @@ def _prepare_codebase(manifest: RunManifest, run_dir: Path, events_log: Path) ->
         _write_event(events_log, "codebase_builtin_created", {"kind": "semantic_memory_sentinel_v1"})
         return codebase_dir
 
+    if repo_url == "builtin:resume-ranking-24-v1":
+        _create_resume_ranking_codebase(codebase_dir)
+        _write_event(events_log, "codebase_builtin_created", {"kind": "resume_ranking_24_v1"})
+        return codebase_dir
+
     if repo_url == "builtin:frontend-figma-app-v1":
         _create_frontend_figma_app_codebase(codebase_dir)
         _write_event(events_log, "codebase_builtin_created", {"kind": "frontend_figma_app_v1"})
@@ -566,6 +571,60 @@ if __name__ == "__main__":
             "--quiet",
             "-m",
             "Create semantic memory sentinel probe",
+        ],
+        check=True,
+    )
+
+
+def _create_resume_ranking_codebase(codebase_dir: Path) -> None:
+    candidate_roots = []
+    if os.environ.get("HARNESS_REPO_ROOT"):
+        candidate_roots.append(Path(os.environ["HARNESS_REPO_ROOT"]))
+    candidate_roots.append(Path.cwd())
+    candidate_roots.append(Path("/workspace"))
+    source_dir = next((root / "24-resumes" for root in candidate_roots if (root / "24-resumes").exists()), None)
+    if source_dir is None:
+        searched = ", ".join(str(root / "24-resumes") for root in candidate_roots)
+        raise FileNotFoundError(f"missing resume source directory; searched: {searched}")
+    pdfs = sorted(source_dir.glob("*.pdf"))
+    if len(pdfs) != 24:
+        raise ValueError(f"expected 24 PDF resumes in {source_dir}, found {len(pdfs)}")
+
+    codebase_dir.mkdir(parents=True)
+    target_dir = codebase_dir / "24-resumes"
+    target_dir.mkdir()
+    for pdf in pdfs:
+        shutil.copy2(pdf, target_dir / pdf.name)
+
+    (codebase_dir / "README.md").write_text(
+        "# Resume Ranking Context Probe\n\n"
+        "This repository is a controlled semantic-memory benchmark input. The 24 "
+        "candidate resumes are PDF files in `24-resumes/`.\n\n"
+        "The benchmark task asks agents to read all resumes and rank the strongest "
+        "candidate for a role building investor pipelines. The research target is "
+        "agent context construction: file discovery, PDF extraction strategy, tool "
+        "outputs carried into model requests, and any subagent delegation.\n"
+    )
+    (codebase_dir / ".gitignore").write_text(
+        ".agent-extracted-resumes/\n"
+        "resume_text/\n"
+        "*.tmp\n"
+    )
+    subprocess.run(["git", "-C", str(codebase_dir), "init", "--quiet"], check=True)
+    subprocess.run(["git", "-C", str(codebase_dir), "add", "."], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(codebase_dir),
+            "-c",
+            "user.name=Agent Harness",
+            "-c",
+            "user.email=agent-harness@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "Create resume ranking context probe",
         ],
         check=True,
     )
@@ -1171,6 +1230,18 @@ def _run_docker(manifest: RunManifest, run_dir: Path, adapter) -> int:
         "--env", "HOME=/home/agent",
         "--env", "CODEX_HOME=/home/agent/.codex",
     ]
+    if manifest.codebase.repo_url == "builtin:resume-ranking-24-v1":
+        repo_root = Path.cwd().resolve()
+        cmd.extend(
+            [
+                "--volume",
+                f"{repo_root}:/workspace:ro",
+                "--env",
+                "HARNESS_REPO_ROOT=/workspace",
+                "--env",
+                "PYTHONPATH=/workspace",
+            ]
+        )
     prompt_ablations_dir = (Path.cwd() / "prompt_ablations").resolve()
     if prompt_ablations_dir.exists():
         cmd.extend(["--volume", f"{prompt_ablations_dir}:/prompt_ablations:ro"])

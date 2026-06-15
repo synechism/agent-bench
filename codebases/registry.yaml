@@ -52,6 +52,11 @@ semantic_memory_sentinel:
   commit: "builtin-semantic-memory-sentinel-v1"
   language: text
 
+resume_ranking_24:
+  repo_url: builtin:resume-ranking-24-v1
+  commit: "builtin-resume-ranking-24-v1"
+  language: text
+
 frontend_figma_app:
   repo_url: builtin:frontend-figma-app-v1
   commit: "builtin-frontend-figma-app-v1"

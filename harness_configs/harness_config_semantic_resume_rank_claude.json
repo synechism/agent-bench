@@ -1,0 +1,12 @@
+{
+  "agents": ["claude_code"],
+  "codebases": ["resume_ranking_24"],
+  "tasks": ["resume_investor_pipeline_rank"],
+  "memory_caps": [null],
+  "repetitions": 1,
+  "sandbox": "docker",
+  "runs_dir": "runs",
+  "timeout_per_run": 2700,
+  "parallel_jobs": 1,
+  "log_api_usage": true
+}

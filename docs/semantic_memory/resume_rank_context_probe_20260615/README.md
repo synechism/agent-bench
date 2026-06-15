@@ -25,6 +25,8 @@ Both agents used a single main-agent loop. Codex did not invoke `multi_agent_v1`
 
 Both agents converted PDFs into text through shell/Python tooling, then let the extracted text enter the next model requests as tool-output memory. In this run, that memory was monotonic: each later request carried the earlier extraction outputs plus new ones. There was no observed compaction or dropping of resume text before the final answer.
 
+Neither agent followed a `read one resume -> rank/update score -> read next resume` loop. Both followed a `discover/extract -> load resume text into context in batches -> rank after all 24 were available` pattern.
+
 Codex initially tried to dump all 24 resumes in one Python/PyPDF2 command. That output was visibly truncated inside the tool result with a truncation marker, so the model did not receive the middle of that all-at-once extraction. Codex then repaired coverage by re-reading grouped ranges: resumes 6-12, 13-18, and 19-24.
 
 Claude Code first extracted all 24 resumes into `/tmp/resumes.json` with `pdfplumber`, then read the JSON back in groups: 1-4, then 5-9, 10-14, 15-19, and 20-24. The last four group reads were issued together in one assistant step, so their outputs all entered the next request at once.
@@ -72,6 +74,35 @@ Interpretation: Codex used direct command output as its memory substrate. The fi
 | 9 | 46,187 | 109,353 | Read resumes 5-9, 10-14, 15-19, and 20-24 | 91,587 | 5-24 |
 
 Interpretation: Claude Code separated extraction from reading. The extraction command itself only put short per-resume extraction summaries into context. The real context growth happened when the agent printed grouped resume text back from `/tmp/resumes.json`. The final request received four grouped outputs at once, causing the largest jump.
+
+## Ranking Process
+
+Codex did not begin ranking after each resume or after each batch. Its visible sequence was:
+
+1. Discover all 24 PDF filenames.
+2. Check PDF extraction tooling.
+3. Install `PyPDF2`.
+4. Attempt one all-resume extraction.
+5. Notice the output was truncated.
+6. Re-read the missing/uncertain ranges in batches.
+7. After the final batch, state that it had read all 24 resumes and then produce the analysis/ranking.
+
+The decisive marker is the agent message after the first large extraction: "Good, I got a large chunk but some was truncated. Let me extract in batches to ensure I catch every resume fully." The ranking came after the final grouped extraction, not interleaved with individual file reads.
+
+Claude Code also did not rank incrementally. Its visible sequence was:
+
+1. Discover all 24 PDF filenames.
+2. Check available PDF tooling.
+3. Install `pdfplumber`.
+4. Extract all 24 PDFs to `/tmp/resumes.json`, while only printing extraction counts.
+5. Read resumes 1-4.
+6. Decide to continue reading the remaining resumes rather than rank.
+7. Read resumes 5-9, 10-14, 15-19, and 20-24 in one multi-tool assistant step.
+8. After all grouped outputs returned, reason that all 24 had been read and then evaluate every resume against criteria before producing the final ranking.
+
+The decisive marker is Claude Code's post-read reasoning: "Now I have all 24 resumes read. Let me analyze each one systematically for the role of helping build investor pipelines." That means the ranking pass was a separate final synthesis over accumulated context, not a rolling update after each resume.
+
+The practical difference is how each agent staged evidence before ranking. Codex used stdout from direct extraction commands as its working memory and corrected a truncation failure with overlapping group reads. Claude Code used a temporary extracted-text JSON file as a local cache, then selectively printed groups into model context. In both cases, the model's actual ranking decision happened only after all resume text it intended to use had been serialized back into the prompt.
 
 ## What Entered The Context Window
 
